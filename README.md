@@ -42,22 +42,6 @@ A password-protected employee probation management tool built as a single-page R
 - **Import CSV/Excel** — Upload spreadsheets with auto column mapping
 - **Reset to original** — Restore the initial dataset from the Excel import
 
-## Pre-loaded Data
-
-9 employees from the EE Probation Tracker spreadsheet with full compliance and review data:
-
-| # | Name | Title | Department |
-|---|------|-------|------------|
-| 161 | Maximilian Lee | Accounting Associate | Accounting |
-| 164 | Jihi Kim | E-Commerce Asst. Manager | E-Commerce |
-| 165 | Minjin (Jenny) Kim | Planning Associate | Planning |
-| 166 | Kyooyoung Shim | Facility Planning Manager | Facility Planning |
-| 167 | Kwang Hyuk Kim | Asian Retail Sr. Manager | Asian Retail |
-| 168 | Subin Kim | R&D Associate | R&D |
-| 169 | Allison Sarah Marines | QA Asst. Manager | QA |
-| 170 | Jared Musa | Purchasing Asst. Manager | Purchasing |
-| 171 | Eunsol Jung | Sales Admin Associate | Sales Admin |
-
 ## Tech Stack
 
 - **React 18** (CDN, no build step)
