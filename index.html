@@ -1,0 +1,2999 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>EE Management — Probation Tracker</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/d3@7/dist/d3.min.js"></script>
+<style>
+:root {
+  --bg: #ffffff;
+  --sidebar-bg: #fbfbfa;
+  --hover-bg: #efefef;
+  --active-bg: #f1f1ef;
+  --light-bg: #f7f6f3;
+  --border: #e9e9e7;
+  --text: #37352f;
+  --text-secondary: #787774;
+  --text-light: #a4a4a0;
+  --blue: #2383e2;
+  --blue-hover: #0b6bcb;
+  --red: #e03e3e;
+  --green: #0f7b6c;
+  --orange: #d9730d;
+  --purple: #9333ea;
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
+  --font-title: Georgia, serif;
+  --card-shadow: rgba(15,15,15,0.1) 0px 0px 0px 1px, rgba(15,15,15,0.05) 0px 2px 4px;
+  --popover-shadow: 0 0 0 1px rgba(15,15,15,0.05), 0 3px 6px rgba(15,15,15,0.1), 0 9px 24px rgba(15,15,15,0.2);
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body, #root { height: 100%; }
+body {
+  font-family: var(--font); color: var(--text); background: var(--bg);
+  font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased;
+}
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d3d1cb; border-radius: 4px; }
+@keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+@keyframes fadeUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+@keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+@keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+@keyframes spin { from { transform:rotate(0deg); } to { transform:rotate(360deg); } }
+@keyframes float { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-8px); } }
+@keyframes shimmer { 0% { background-position:-200% 0; } 100% { background-position:200% 0; } }
+@keyframes shake { 0%,100% { transform:translateX(0); } 20%,60% { transform:translateX(-6px); } 40%,80% { transform:translateX(6px); } }
+input, textarea, select, button { font-family: var(--font); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
+
+/* ── Icons ── */
+const ICONS = {
+  clipboardList: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2",
+  chevronLeft: "M15 18l-6-6 6-6",
+  chevronRight: "M9 18l6-6-6-6",
+  chevronDown: "M6 9l6 6 6-6",
+  plus: "M12 5v14M5 12h14",
+  x: "M18 6L6 18M6 6l12 12",
+  search: "M11 3a8 8 0 100 16 8 8 0 000-16zM21 21l-4.35-4.35",
+  trash: "M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2",
+  check: "M20 6L9 17l-5-5",
+  checkCircle: "M22 11.08V12a10 10 0 11-5.93-9.14M22 4L12 14.01l-3-3",
+  clock: "M12 2a10 10 0 100 20 10 10 0 000-20zM12 6v6l4 2",
+  alert: "M12 2a10 10 0 100 20 10 10 0 000-20zM12 8v4M12 16h.01",
+  file: "M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6",
+  users: "M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 7a4 4 0 100 8 4 4 0 000-8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75",
+  download: "M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3",
+  upload: "M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12",
+  table: "M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18",
+  kanban: "M6 3h3v18H6zM15 3h3v12h-3",
+  timeline: "M4 6h16M4 12h10M4 18h14",
+  barChart: "M18 20V10M12 20V4M6 20v-6",
+  calendar: "M19 4H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V6a2 2 0 00-2-2zM16 2v4M8 2v4M3 10h18",
+  flag: "M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s0 0-4 1-5-2-8-2-4 1-4 1zM4 22v-7",
+  sparkle: "M12 2L14.09 8.26L20 9.27L15.55 13.97L16.91 20L12 16.9L7.09 20L8.45 13.97L4 9.27L9.91 8.26L12 2Z",
+  send: "M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13",
+  messageCircle: "M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z",
+  zap: "M13 2L3 14h9l-1 8 10-12h-9l1-8",
+  refresh: "M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15",
+};
+
+function Icon({ name, size = 16, color = "currentColor", style = {} }) {
+  const d = ICONS[name];
+  if (!d) return null;
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+      style={{ flexShrink: 0, display: "inline-block", verticalAlign: "middle", ...style }}>
+      <path d={d}/>
+    </svg>
+  );
+}
+
+/* ── Constants ── */
+const PHASES = ["Pre-boarding", "Day 1", "Week 1", "Month 1", "Month 3"];
+const STATUSES = ["Not started", "In progress", "In review", "Done"];
+const PRIORITIES = ["High", "Medium", "Low"];
+const PHASE_COLORS = {
+  "Pre-boarding": "#9333ea", "Day 1": "#2563eb", "Week 1": "#0891b2",
+  "Month 1": "#059669", "Month 3": "#d97706",
+};
+const STATUS_STYLES = {
+  "Not started": { color: "#91918e", bg: "#f1f1ef" },
+  "In progress": { color: "#2563eb", bg: "#d3e5ef" },
+  "In review":   { color: "#d97706", bg: "#fdecc8" },
+  "Done":        { color: "#0f7b6c", bg: "#dbeddb" },
+};
+const PRIORITY_STYLES = {
+  "High":   { color: "#e03e3e", bg: "#ffe2dd" },
+  "Medium": { color: "#d9730d", bg: "#fdecc8" },
+  "Low":    { color: "#0f7b6c", bg: "#dbeddb" },
+};
+
+let _idCounter = 200;
+function genId() { return "t" + (++_idCounter); }
+
+function todayStr() {
+  const d = new Date();
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+}
+function addDays(base, n) {
+  const d = new Date(base);
+  d.setDate(d.getDate() + n);
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+}
+function isOverdue(task) {
+  return task.status !== "Done" && task.due && task.due < todayStr();
+}
+
+/* ── Initial Data from EE_Probation_Tracker_FINAL.xlsx ── */
+const EE_DATA = [
+  { num: 161, name: "Maximilian Lee", eeId: "2025022-A", title: "Accounting Associate", level: "G4", manager: "Jenny Lee", dept: "Management", team: "Accounting", badge: "2025022-A", hireDate: "2025-12-22", eVerify: true, i9: true, bgCheck: true, concentra: true, proFlowers: true, d30: "2026-01-21", d30Done: true, d30Reviewer: "Eleanor", d30Notes: "Arrogant, doesn't care about team", d60: "2026-02-20", d60Done: true, d60Status: "Complete", d60Reviewer: "Alex", healthIns: true, d60Notes: "", d90: "2026-03-22", d90Done: false, d90Status: "", d90Reviewer: "", d90Notes: "", probStatus: "At Risk", daysToNext: 5, alert: "Due Soon" },
+  { num: 164, name: "Jihi Kim", eeId: "2025025_A", title: "E-Commerce Assistant Manager", level: "G3", manager: "James Park", dept: "National Sales", team: "E-Commerce", badge: "2025025_A", hireDate: "2025-12-01", eVerify: true, i9: true, bgCheck: true, concentra: true, proFlowers: true, d30: "2025-12-31", d30Done: true, d30Reviewer: "Mose", d30Notes: "Assisting William with Amazon", d60: "2026-01-30", d60Done: true, d60Status: "Complete", d60Reviewer: "Eleanor", healthIns: true, d60Notes: "", d90: "2026-03-01", d90Done: false, d90Status: "", d90Reviewer: "", d90Notes: "", probStatus: "At Risk", daysToNext: -16, alert: "Overdue" },
+  { num: 165, name: "Minjin (Jenny) Kim", eeId: "2026001-A", title: "Planning Associate", level: "G4", manager: "Inyoung Choi", dept: "Management", team: "Planning", badge: "2026001-A", hireDate: "2026-02-17", eVerify: true, i9: true, bgCheck: true, concentra: true, proFlowers: true, d30: "2026-03-19", d30Done: false, d30Reviewer: "", d30Notes: "", d60: "2026-04-18", d60Done: false, d60Status: "", d60Reviewer: "", healthIns: false, d60Notes: "", d90: "2026-05-18", d90Done: false, d90Status: "", d90Reviewer: "", d90Notes: "", probStatus: "On Track", daysToNext: 2, alert: "Due Soon" },
+  { num: 166, name: "Kyooyoung Shim", eeId: "2026002-A", title: "Facility Planning Manager", level: "G2", manager: "Joseph Lee", dept: "Production", team: "Facility Planning", badge: "2026002-A", hireDate: "2026-02-02", eVerify: true, i9: true, bgCheck: true, concentra: true, proFlowers: true, d30: "2026-03-04", d30Done: false, d30Reviewer: "", d30Notes: "", d60: "2026-04-03", d60Done: false, d60Status: "", d60Reviewer: "", healthIns: false, d60Notes: "", d90: "2026-05-03", d90Done: false, d90Status: "", d90Reviewer: "", d90Notes: "", probStatus: "On Track", daysToNext: -13, alert: "Overdue" },
+  { num: 167, name: "Kwang Hyuk Kim", eeId: "2026003-A", title: "Asian Retail Senior Manager", level: "G1", manager: "Brad Chung", dept: "Local Sales", team: "Asian Retail", badge: "2026003-A", hireDate: "2026-01-05", eVerify: true, i9: true, bgCheck: true, concentra: true, proFlowers: true, d30: "2026-02-04", d30Done: true, d30Reviewer: "Eleanor", d30Notes: "Likes to work with Songho", d60: "2026-03-06", d60Done: false, d60Status: "", d60Reviewer: "Mose", healthIns: true, d60Notes: "", d90: "2026-04-05", d90Done: false, d90Status: "", d90Reviewer: "", d90Notes: "", probStatus: "On Track", daysToNext: -11, alert: "Overdue" },
+  { num: 168, name: "Subin Kim", eeId: "2026004-A", title: "R&D Associate", level: "G4", manager: "Eunji An", dept: "Marketing", team: "R&D", badge: "2026004-A", hireDate: "2026-02-23", eVerify: true, i9: true, bgCheck: false, concentra: false, proFlowers: true, d30: "2026-03-25", d30Done: false, d30Reviewer: "", d30Notes: "", d60: "2026-04-24", d60Done: false, d60Status: "", d60Reviewer: "", healthIns: false, d60Notes: "", d90: "2026-05-24", d90Done: false, d90Status: "", d90Reviewer: "", d90Notes: "", probStatus: "On Track", daysToNext: 8, alert: "Upcoming" },
+  { num: 169, name: "Allison Sarah Marines", eeId: "2026005-A", title: "QA Assistant Manager", level: "G3", manager: "Abel Escalante", dept: "Production", team: "QA", badge: "2026005-A", hireDate: "2026-02-23", eVerify: true, i9: true, bgCheck: false, concentra: false, proFlowers: true, d30: "2026-03-25", d30Done: false, d30Reviewer: "", d30Notes: "", d60: "2026-04-24", d60Done: false, d60Status: "", d60Reviewer: "", healthIns: false, d60Notes: "", d90: "2026-05-24", d90Done: false, d90Status: "", d90Reviewer: "", d90Notes: "", probStatus: "On Track", daysToNext: 8, alert: "Upcoming" },
+  { num: 170, name: "Jared Musa", eeId: "2026006-A", title: "Purchasing Assistant Manager", level: "G3", manager: "Raquel Urias", dept: "Production", team: "Purchasing", badge: "2026006-A", hireDate: "2026-03-03", eVerify: true, i9: true, bgCheck: false, concentra: false, proFlowers: true, d30: "2026-04-02", d30Done: false, d30Reviewer: "", d30Notes: "", d60: "2026-05-02", d60Done: false, d60Status: "", d60Reviewer: "", healthIns: false, d60Notes: "", d90: "2026-06-01", d90Done: false, d90Status: "", d90Reviewer: "", d90Notes: "", probStatus: "On Track", daysToNext: 16, alert: "" },
+  { num: 171, name: "Eunsol Jung", eeId: "2026007-A", title: "Sales Admin Associate", level: "G4", manager: "Jinwook Suh", dept: "Local Sales", team: "Sales Admin", badge: "2026007-A", hireDate: "2026-03-02", eVerify: true, i9: true, bgCheck: false, concentra: false, proFlowers: true, d30: "2026-04-01", d30Done: false, d30Reviewer: "", d30Notes: "", d60: "2026-05-01", d60Done: false, d60Status: "", d60Reviewer: "", healthIns: false, d60Notes: "", d90: "2026-05-31", d90Done: false, d90Status: "", d90Reviewer: "", d90Notes: "", probStatus: "On Track", daysToNext: 15, alert: "" },
+];
+
+function createInitialTasks() {
+  const tasks = [];
+  EE_DATA.forEach(ee => {
+    const hire = ee.name;
+    const mgr = ee.manager;
+
+    // Pre-boarding tasks
+    tasks.push({ id: genId(), title: "E-Verify completion", phase: "Pre-boarding", priority: "High", status: ee.eVerify ? "Done" : "Not started", hire, assignee: "HR", due: ee.hireDate, notes: `EE ID: ${ee.eeId}` });
+    tasks.push({ id: genId(), title: "I-9 verification", phase: "Pre-boarding", priority: "High", status: ee.i9 ? "Done" : "Not started", hire, assignee: "HR", due: ee.hireDate, notes: "" });
+    tasks.push({ id: genId(), title: "Background check", phase: "Pre-boarding", priority: "High", status: ee.bgCheck ? "Done" : (ee.bgCheck === false ? "In progress" : "Not started"), hire, assignee: "HR", due: ee.hireDate, notes: ee.bgCheck ? "" : "Pending" });
+    tasks.push({ id: genId(), title: "Concentra screening", phase: "Pre-boarding", priority: "High", status: ee.concentra ? "Done" : "In progress", hire, assignee: "HR", due: ee.hireDate, notes: ee.concentra ? "" : "Pending" });
+    tasks.push({ id: genId(), title: "ProFlowers welcome gift", phase: "Pre-boarding", priority: "Low", status: ee.proFlowers ? "Done" : "Not started", hire, assignee: "HR", due: ee.hireDate, notes: "" });
+
+    // Day 1 tasks
+    tasks.push({ id: genId(), title: "Badge issuance", phase: "Day 1", priority: "Medium", status: "Done", hire, assignee: "HR", due: ee.hireDate, notes: `Badge: ${ee.badge}` });
+    tasks.push({ id: genId(), title: "Office tour & team introduction", phase: "Day 1", priority: "Medium", status: "Done", hire, assignee: mgr, due: ee.hireDate, notes: `Dept: ${ee.dept} / Team: ${ee.team}` });
+
+    // 30-Day review
+    tasks.push({ id: genId(), title: "30-day probation review", phase: "Month 1", priority: "High", status: ee.d30Done ? "Done" : (ee.d30 < todayStr() ? "In review" : "Not started"), hire, assignee: ee.d30Reviewer || mgr, due: ee.d30, notes: ee.d30Notes || "" });
+
+    // 60-Day review
+    const d60Status = ee.d60Done ? "Done" : (ee.d60Status === "Complete" ? "Done" : (ee.d60 < todayStr() ? "In review" : "Not started"));
+    tasks.push({ id: genId(), title: "60-day probation review", phase: "Month 1", priority: "High", status: d60Status, hire, assignee: ee.d60Reviewer || mgr, due: ee.d60, notes: ee.d60Notes || "" });
+
+    // Health insurance enrollment
+    tasks.push({ id: genId(), title: "Health insurance enrollment", phase: "Month 1", priority: "High", status: ee.healthIns ? "Done" : "Not started", hire, assignee: "HR", due: ee.d60, notes: "" });
+
+    // 90-Day review
+    const d90Status = ee.d90Done ? "Done" : (ee.d90 < todayStr() ? "In review" : "Not started");
+    tasks.push({ id: genId(), title: "90-day performance review", phase: "Month 3", priority: "High", status: d90Status, hire, assignee: ee.d90Reviewer || mgr, due: ee.d90, notes: ee.d90Notes || "" });
+
+    // Probation status task
+    const probPri = ee.probStatus === "At Risk" ? "High" : "Medium";
+    const probStat = ee.probStatus === "At Risk" ? "In review" : "In progress";
+    tasks.push({ id: genId(), title: "Probation clearance", phase: "Month 3", priority: probPri, status: probStat, hire, assignee: "HR", due: ee.d90, notes: `Status: ${ee.probStatus}${ee.alert ? " | Alert: " + ee.alert : ""}${ee.daysToNext ? " | Days to next milestone: " + ee.daysToNext : ""}` });
+  });
+  return tasks;
+}
+
+/* ── Tag ── */
+function Tag({ label, styleMap, small }) {
+  const s = styleMap && styleMap[label];
+  if (!s) return <span style={{ fontSize: small ? 11 : 12, color: "var(--text-secondary)" }}>{label}</span>;
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", fontSize: small ? 11 : 12,
+      fontWeight: 400, padding: "2px 8px", borderRadius: 3,
+      background: s.bg, color: s.color, whiteSpace: "nowrap", lineHeight: "20px",
+    }}>{label}</span>
+  );
+}
+
+function PhaseTag({ label, small }) {
+  const c = PHASE_COLORS[label] || "var(--text-secondary)";
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", fontSize: small ? 11 : 12,
+      fontWeight: 400, padding: "2px 8px", borderRadius: 3,
+      background: c + "18", color: c, whiteSpace: "nowrap", lineHeight: "20px",
+    }}>{label}</span>
+  );
+}
+
+/* ── NSelect ── */
+function NSelect({ value, options, styleMap, onChange, phaseMode }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const dropRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  useEffect(() => {
+    if (open && dropRef.current) {
+      const rect = dropRef.current.getBoundingClientRect();
+      if (rect.bottom > window.innerHeight) {
+        dropRef.current.style.top = "auto";
+        dropRef.current.style.bottom = "100%";
+        dropRef.current.style.marginBottom = "4px";
+        dropRef.current.style.marginTop = "0";
+      }
+      if (rect.right > window.innerWidth) {
+        dropRef.current.style.left = "auto";
+        dropRef.current.style.right = "0";
+      }
+    }
+  }, [open]);
+
+  return (
+    <div ref={ref} style={{ position: "relative", display: "inline-block" }}>
+      <div onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
+        style={{ cursor: "pointer", borderRadius: 4, padding: "2px 4px", transition: "background 20ms ease-in" }}
+        onMouseEnter={e => e.currentTarget.style.background = "var(--hover-bg)"}
+        onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+      >
+        {phaseMode ? <PhaseTag label={value}/> : <Tag label={value} styleMap={styleMap}/>}
+      </div>
+      {open && (
+        <div ref={dropRef} style={{
+          position: "absolute", top: "100%", left: 0, marginTop: 4, zIndex: 1000,
+          background: "#fff", borderRadius: 6, padding: "6px 0", minWidth: 180,
+          boxShadow: "var(--popover-shadow)",
+        }}>
+          {options.map(opt => (
+            <div key={opt}
+              onClick={(e) => { e.stopPropagation(); onChange(opt); setOpen(false); }}
+              style={{
+                padding: "6px 14px", cursor: "pointer",
+                background: opt === value ? "var(--light-bg)" : "transparent",
+                transition: "background 20ms ease-in",
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = "var(--light-bg)"}
+              onMouseLeave={e => e.currentTarget.style.background = opt === value ? "var(--light-bg)" : "transparent"}
+            >
+              {phaseMode ? <PhaseTag label={opt}/> : <Tag label={opt} styleMap={styleMap}/>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Email Templates ── */
+function getEmailTemplates(task) {
+  const ee = EE_DATA.find(e => e.name === task.hire) || {};
+  const name = task.hire || "[Employee Name]";
+  const first = name.split(" ")[0] || name;
+  const mgr = ee.manager || task.assignee || "[Manager]";
+  const title = ee.title || "[Job Title]";
+  const dept = ee.dept || "[Department]";
+  const team = ee.team || "[Team]";
+  const eeId = ee.eeId || "[EE ID]";
+  const hireDate = ee.hireDate || "[Hire Date]";
+  const due = task.due || "[Due Date]";
+
+  const fmtD = (d) => {
+    if (!d) return "[Date]";
+    try { return new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }); }
+    catch { return d; }
+  };
+
+  const templates = {
+    "E-Verify completion": [
+      {
+        label: "To HR — E-Verify reminder",
+        to: "HR Team",
+        subject: `E-Verify Completion Required — ${name} (${eeId})`,
+        body: `Hi HR Team,
+
+Please ensure E-Verify has been completed for the following new hire:
+
+  Employee: ${name}
+  EE ID: ${eeId}
+  Job Title: ${title}
+  Department: ${dept}
+  Hire Date: ${fmtD(hireDate)}
+
+E-Verify must be completed within 3 business days of the employee's start date per federal requirements.
+
+Please confirm once completed.
+
+Thank you.`
+      },
+    ],
+    "I-9 verification": [
+      {
+        label: "To Employee — I-9 documents needed",
+        to: name,
+        subject: `Action Required: I-9 Verification — ${name}`,
+        body: `Hi ${first},
+
+Welcome aboard! As part of your onboarding, we need to complete your I-9 Employment Eligibility Verification.
+
+Please bring the following to HR by ${fmtD(due)}:
+
+  Option A: One document from List A (e.g., US Passport, Permanent Resident Card)
+  Option B: One from List B (e.g., Driver's License) AND one from List C (e.g., Social Security Card)
+
+Full list of acceptable documents: https://www.uscis.gov/i-9-central/form-i-9-acceptable-documents
+
+If you have any questions, please don't hesitate to reach out.
+
+Best regards,
+HR Department`
+      },
+      {
+        label: "To HR — I-9 completion reminder",
+        to: "HR Team",
+        subject: `I-9 Verification Pending — ${name} (${eeId})`,
+        body: `Hi HR Team,
+
+The I-9 verification for ${name} (${eeId}) is still pending.
+
+  Hire Date: ${fmtD(hireDate)}
+  Department: ${dept}
+  Deadline: Section 1 must be completed by first day; Section 2 within 3 business days of start.
+
+Please follow up and ensure completion.
+
+Thank you.`
+      },
+    ],
+    "Background check": [
+      {
+        label: "To HR — Background check follow-up",
+        to: "HR Team",
+        subject: `Background Check Status — ${name} (${eeId})`,
+        body: `Hi HR Team,
+
+Please provide an update on the background check for:
+
+  Employee: ${name}
+  EE ID: ${eeId}
+  Job Title: ${title}
+  Hire Date: ${fmtD(hireDate)}
+
+Current status: Pending
+
+Please confirm results or escalate if there are any delays.
+
+Thank you.`
+      },
+    ],
+    "Concentra screening": [
+      {
+        label: "To Employee — Screening appointment",
+        to: name,
+        subject: `Pre-Employment Screening Appointment — ${name}`,
+        body: `Hi ${first},
+
+As part of your onboarding process, you are required to complete a pre-employment screening at Concentra.
+
+Please schedule and complete your appointment as soon as possible. Bring a valid photo ID.
+
+If you've already completed this, please disregard this message and let HR know so we can update your file.
+
+Best regards,
+HR Department`
+      },
+      {
+        label: "To HR — Concentra results follow-up",
+        to: "HR Team",
+        subject: `Concentra Screening Results Pending — ${name} (${eeId})`,
+        body: `Hi HR Team,
+
+The Concentra screening results for ${name} (${eeId}) are still pending.
+
+Please follow up with Concentra to obtain results and update the employee's file.
+
+Thank you.`
+      },
+    ],
+    "ProFlowers welcome gift": [
+      {
+        label: "To Admin — Order welcome flowers",
+        to: "Office Admin",
+        subject: `ProFlowers Order — Welcome Gift for ${name}`,
+        body: `Hi,
+
+Please place a ProFlowers welcome arrangement for our new hire:
+
+  Employee: ${name}
+  Start Date: ${fmtD(hireDate)}
+  Department: ${dept} / ${team}
+  Deliver to: ${name}'s workstation
+
+Please ensure it arrives by their first day.
+
+Thank you!`
+      },
+    ],
+    "Badge issuance": [
+      {
+        label: "To Security — Badge request",
+        to: "Security / Facilities",
+        subject: `Badge Request — New Hire ${name} (${eeId})`,
+        body: `Hi,
+
+Please prepare an employee badge for the following new hire:
+
+  Employee: ${name}
+  EE ID: ${eeId}
+  Badge #: ${ee.badge || eeId}
+  Department: ${dept}
+  Team: ${team}
+  Start Date: ${fmtD(hireDate)}
+  Manager: ${mgr}
+
+Please have the badge ready for their first day.
+
+Thank you.`
+      },
+    ],
+    "Office tour & team introduction": [
+      {
+        label: "To Manager — Schedule tour & intros",
+        to: mgr,
+        subject: `Office Tour & Team Introduction — ${name} (${fmtD(hireDate)})`,
+        body: `Hi ${mgr},
+
+${name} is joining your team (${team}) on ${fmtD(hireDate)}.
+
+Could you please arrange the following for their first day:
+
+  1. Office tour (facilities, break room, restrooms, emergency exits)
+  2. Introduction to ${team} team members
+  3. Introduction to key cross-functional contacts
+  4. Workspace setup walkthrough
+
+Please also share any team-specific onboarding materials or documentation they should review.
+
+Thank you!
+HR Department`
+      },
+      {
+        label: "To Employee — Welcome & Day 1 info",
+        to: name,
+        subject: `Welcome to the Team — Your First Day Details`,
+        body: `Hi ${first},
+
+We're excited to have you join us as ${title} in the ${team} team!
+
+Here are your first day details:
+
+  Date: ${fmtD(hireDate)}
+  Reporting to: ${mgr}
+  Department: ${dept}
+  Team: ${team}
+
+What to expect:
+  • Office tour and team introductions
+  • Workstation setup
+  • Review of company handbook and policies
+  • Meeting with your manager
+
+Please bring a valid photo ID and any outstanding onboarding documents.
+
+See you soon!
+HR Department`
+      },
+    ],
+    "30-day probation review": [
+      {
+        label: "To Manager — Schedule 30-day review",
+        to: mgr,
+        subject: `30-Day Probation Review Due — ${name} (${fmtD(due)})`,
+        body: `Hi ${mgr},
+
+${name}'s 30-day probation review is due on ${fmtD(due)}.
+
+Please schedule a meeting with ${first} to discuss:
+
+  1. Job performance and quality of work
+  2. Attendance and punctuality
+  3. Attitude and teamwork
+  4. Understanding of job responsibilities
+  5. Areas for improvement
+  6. Any concerns or support needed
+
+After the review, please complete the 30-Day Review Form and submit it to HR.
+
+${task.notes ? "Notes from HR: " + task.notes + "\n\n" : ""}Thank you.
+HR Department`
+      },
+      {
+        label: "To Employee — 30-day check-in",
+        to: name,
+        subject: `Your 30-Day Check-In — ${name}`,
+        body: `Hi ${first},
+
+Congratulations on completing your first 30 days with us!
+
+Your manager (${mgr}) will be scheduling a 30-day check-in meeting with you around ${fmtD(due)}. This is a regular part of our onboarding process.
+
+This is an opportunity to:
+  • Share how you're settling in
+  • Ask any questions about your role
+  • Discuss any support or resources you need
+  • Review your initial goals and progress
+
+Please prepare any feedback or questions you'd like to discuss.
+
+Best regards,
+HR Department`
+      },
+    ],
+    "60-day probation review": [
+      {
+        label: "To Manager — Schedule 60-day review",
+        to: mgr,
+        subject: `60-Day Probation Review Due — ${name} (${fmtD(due)})`,
+        body: `Hi ${mgr},
+
+${name}'s 60-day probation review is due on ${fmtD(due)}.
+
+Please schedule a meeting with ${first} to evaluate:
+
+  1. Progress since the 30-day review
+  2. Job performance and skill development
+  3. Integration with team and company culture
+  4. Completion of required training
+  5. Any ongoing concerns or improvement areas
+  6. Recommendation: On Track / Needs Improvement / At Risk
+
+${task.notes ? "Previous notes: " + task.notes + "\n\n" : ""}After the review, please complete the 60-Day Review Form and return to HR by ${fmtD(due)}.
+
+Thank you.
+HR Department`
+      },
+      {
+        label: "To Employee — 60-day review scheduled",
+        to: name,
+        subject: `Your 60-Day Review — ${name}`,
+        body: `Hi ${first},
+
+You're approaching your 60-day milestone! Your manager (${mgr}) will schedule your 60-day probation review around ${fmtD(due)}.
+
+Please be prepared to discuss:
+  • Your accomplishments and contributions so far
+  • Challenges you've encountered
+  • Goals for your remaining probation period
+  • Any feedback or support you need
+
+This review helps ensure you're set up for long-term success here.
+
+Best regards,
+HR Department`
+      },
+    ],
+    "Health insurance enrollment": [
+      {
+        label: "To Employee — Benefits enrollment reminder",
+        to: name,
+        subject: `Action Required: Health Insurance Enrollment — ${name}`,
+        body: `Hi ${first},
+
+This is a reminder to complete your health insurance enrollment.
+
+  Enrollment Deadline: ${fmtD(due)}
+  EE ID: ${eeId}
+
+You are eligible to enroll in the following benefits:
+  • Medical insurance
+  • Dental insurance
+  • Vision insurance
+  • Life insurance
+
+Please review the benefits package and complete your enrollment by the deadline. If you miss this window, you'll need to wait until the next open enrollment period.
+
+For questions about plan options or enrollment, contact HR.
+
+Best regards,
+HR Department`
+      },
+    ],
+    "90-day performance review": [
+      {
+        label: "To Manager — Schedule 90-day review",
+        to: mgr,
+        subject: `90-Day Probation Review Due — ${name} (${fmtD(due)})`,
+        body: `Hi ${mgr},
+
+${name}'s 90-day probation review is due on ${fmtD(due)}. This is the final probation review.
+
+Please schedule a comprehensive meeting to evaluate:
+
+  1. Overall job performance during probation
+  2. Progress on goals set during 30/60-day reviews
+  3. Cultural fit and team collaboration
+  4. Attendance record
+  5. Completion of all required training and certifications
+  6. Final recommendation: Pass Probation / Extend Probation / Terminate
+
+${task.notes ? "Previous notes: " + task.notes + "\n\n" : ""}Please complete the 90-Day Final Review Form and submit to HR by ${fmtD(due)}.
+
+This review determines whether ${first}'s probation will be cleared, extended, or ended. Please take sufficient time to provide thorough feedback.
+
+Thank you.
+HR Department`
+      },
+      {
+        label: "To Employee — 90-day review notice",
+        to: name,
+        subject: `Your 90-Day Probation Review — ${name}`,
+        body: `Hi ${first},
+
+You are approaching the end of your 90-day probation period. Your manager (${mgr}) will schedule your final probation review around ${fmtD(due)}.
+
+This is an important milestone. Please be prepared to discuss:
+  • Your key accomplishments during the probation period
+  • Goals and objectives you've achieved
+  • Areas where you've grown
+  • Any feedback or concerns
+  • Your goals moving forward
+
+After a successful review, your probation will be cleared and you'll become a regular employee.
+
+Best regards,
+HR Department`
+      },
+    ],
+    "Probation clearance": [
+      {
+        label: "To Employee — Probation passed",
+        to: name,
+        subject: `Congratulations — Probation Cleared! — ${name}`,
+        body: `Hi ${first},
+
+Congratulations! We are pleased to inform you that you have successfully completed your 90-day probation period.
+
+  Employee: ${name}
+  EE ID: ${eeId}
+  Job Title: ${title}
+  Department: ${dept}
+  Hire Date: ${fmtD(hireDate)}
+  Probation End: ${fmtD(due)}
+
+You are now a regular full-time employee. We're delighted to have you as part of the team and look forward to your continued contributions.
+
+If you have any questions about your updated employment status or benefits, please reach out.
+
+Welcome aboard!
+HR Department`
+      },
+      {
+        label: "To Employee — Probation extension notice",
+        to: name,
+        subject: `Probation Extension Notice — ${name}`,
+        body: `Hi ${first},
+
+After reviewing your performance during the initial probation period, we have decided to extend your probation for an additional [30/60] days.
+
+  Employee: ${name}
+  EE ID: ${eeId}
+  Original Probation End: ${fmtD(due)}
+  Extended End Date: [New Date]
+  Reason: [Brief reason]
+
+During this extension, we expect to see improvement in the following areas:
+  1. [Area 1]
+  2. [Area 2]
+  3. [Area 3]
+
+Your manager (${mgr}) will continue to provide guidance and support. A follow-up review will be scheduled before the new end date.
+
+Please reach out to HR if you have any questions.
+
+Best regards,
+HR Department`
+      },
+      {
+        label: "To Manager — At-risk employee alert",
+        to: mgr,
+        subject: `At-Risk Employee Alert — ${name}`,
+        body: `Hi ${mgr},
+
+This is to notify you that ${name} (${eeId}) has been flagged as "At Risk" in the probation tracker.
+
+  Employee: ${name}
+  Job Title: ${title}
+  Department: ${dept} / ${team}
+  Probation End Date: ${fmtD(due)}
+  Days to Next Milestone: ${ee.daysToNext || "N/A"}
+
+${task.notes ? "Current notes: " + task.notes + "\n\n" : ""}Please take the following actions:
+  1. Schedule a meeting with ${first} to discuss performance concerns
+  2. Document specific areas needing improvement
+  3. Create a performance improvement plan if necessary
+  4. Notify HR of your recommendation (pass / extend / terminate)
+
+Please respond with your assessment by ${fmtD(due)}.
+
+Thank you.
+HR Department`
+      },
+    ],
+  };
+
+  return templates[task.title] || [
+    {
+      label: "To Assignee — Task reminder",
+      to: task.assignee || mgr,
+      subject: `Action Required: ${task.title} — ${name}`,
+      body: `Hi ${task.assignee || mgr},
+
+This is a reminder that the following task is due:
+
+  Task: ${task.title}
+  Employee: ${name}
+  Phase: ${task.phase}
+  Priority: ${task.priority}
+  Due Date: ${fmtD(due)}
+
+${task.notes ? "Notes: " + task.notes + "\n\n" : ""}Please complete this task and update the tracker.
+
+Thank you.
+HR Department`
+    },
+    {
+      label: "To Employee — Action needed",
+      to: name,
+      subject: `Action Needed: ${task.title}`,
+      body: `Hi ${first},
+
+This is a reminder regarding a pending onboarding item:
+
+  Task: ${task.title}
+  Due Date: ${fmtD(due)}
+  Contact: ${task.assignee || "HR Department"}
+
+Please complete this at your earliest convenience. If you have any questions, reach out to ${task.assignee || "HR"}.
+
+Best regards,
+HR Department`
+    },
+  ];
+}
+
+/* ── Email Template Panel ── */
+function EmailTemplatePanel({ task }) {
+  const templates = getEmailTemplates(task);
+  const [activeIdx, setActiveIdx] = useState(0);
+  const [copied, setCopied] = useState(null);
+
+  const copyToClipboard = (text, which) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(which);
+      setTimeout(() => setCopied(null), 2000);
+    });
+  };
+
+  if (!templates || templates.length === 0) return null;
+  const tpl = templates[activeIdx] || templates[0];
+
+  return (
+    <div style={{ marginTop: 20 }}>
+      <div style={{
+        display: "flex", alignItems: "center", gap: 8, marginBottom: 10,
+      }}>
+        <Icon name="send" size={14} color="var(--text-secondary)"/>
+        <span style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 500 }}>Email Templates</span>
+      </div>
+
+      {/* Template tabs */}
+      {templates.length > 1 && (
+        <div style={{ display: "flex", gap: 4, marginBottom: 8, flexWrap: "wrap" }}>
+          {templates.map((t, i) => (
+            <button key={i} onClick={() => setActiveIdx(i)} style={{
+              fontSize: 11, padding: "4px 10px", borderRadius: 3, cursor: "pointer",
+              border: i === activeIdx ? "1px solid var(--blue)" : "1px solid var(--border)",
+              background: i === activeIdx ? "var(--blue)" + "10" : "#fff",
+              color: i === activeIdx ? "var(--blue)" : "var(--text-secondary)",
+              fontWeight: i === activeIdx ? 500 : 400,
+              transition: "all 20ms ease-in",
+            }}
+              onMouseEnter={e => { if (i !== activeIdx) e.currentTarget.style.background = "var(--hover-bg)"; }}
+              onMouseLeave={e => { if (i !== activeIdx) e.currentTarget.style.background = "#fff"; }}
+            >{t.label}</button>
+          ))}
+        </div>
+      )}
+
+      {/* Email preview */}
+      <div style={{
+        border: "1px solid var(--border)", borderRadius: 6, overflow: "hidden",
+        background: "var(--light-bg)",
+      }}>
+        {/* To / Subject header */}
+        <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", background: "#fff" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+            <span style={{ fontSize: 11, color: "var(--text-light)", width: 50, flexShrink: 0 }}>To:</span>
+            <span style={{ fontSize: 12, color: "var(--text)" }}>{tpl.to}</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontSize: 11, color: "var(--text-light)", width: 50, flexShrink: 0 }}>Subject:</span>
+            <span style={{ fontSize: 12, color: "var(--text)", fontWeight: 500, flex: 1 }}>{tpl.subject}</span>
+            <button onClick={() => copyToClipboard(tpl.subject, "subject")} style={{
+              fontSize: 10, padding: "2px 8px", borderRadius: 3, cursor: "pointer",
+              border: "1px solid var(--border)", background: "#fff",
+              color: copied === "subject" ? "var(--green)" : "var(--text-secondary)",
+              transition: "all 20ms ease-in", flexShrink: 0,
+            }}
+              onMouseEnter={e => e.currentTarget.style.background = "var(--hover-bg)"}
+              onMouseLeave={e => e.currentTarget.style.background = "#fff"}
+            >{copied === "subject" ? "Copied!" : "Copy"}</button>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div style={{ padding: "12px 14px", position: "relative" }}>
+          <pre style={{
+            fontSize: 12, lineHeight: 1.6, color: "var(--text)",
+            whiteSpace: "pre-wrap", wordBreak: "break-word",
+            fontFamily: "var(--font)", margin: 0, background: "transparent",
+          }}>{tpl.body}</pre>
+        </div>
+
+        {/* Action bar */}
+        <div style={{
+          display: "flex", gap: 6, padding: "8px 14px",
+          borderTop: "1px solid var(--border)", background: "#fff",
+        }}>
+          <button onClick={() => copyToClipboard(tpl.body, "body")} style={{
+            display: "flex", alignItems: "center", gap: 5, fontSize: 12, padding: "5px 14px",
+            borderRadius: 4, cursor: "pointer", fontWeight: 500,
+            border: "none", background: "var(--blue)", color: "#fff",
+            transition: "background 20ms ease-in",
+          }}
+            onMouseEnter={e => e.currentTarget.style.background = "var(--blue-hover)"}
+            onMouseLeave={e => e.currentTarget.style.background = "var(--blue)"}
+          >
+            {copied === "body" ? <><Icon name="check" size={13} color="#fff"/> Copied!</> : <><Icon name="clipboardList" size={13} color="#fff"/> Copy body</>}
+          </button>
+          <button onClick={() => copyToClipboard(`Subject: ${tpl.subject}\n\n${tpl.body}`, "all")} style={{
+            display: "flex", alignItems: "center", gap: 5, fontSize: 12, padding: "5px 14px",
+            borderRadius: 4, cursor: "pointer",
+            border: "1px solid var(--border)", background: "#fff", color: "var(--text-secondary)",
+            transition: "background 20ms ease-in",
+          }}
+            onMouseEnter={e => e.currentTarget.style.background = "var(--hover-bg)"}
+            onMouseLeave={e => e.currentTarget.style.background = "#fff"}
+          >
+            {copied === "all" ? <><Icon name="check" size={13}/> Copied!</> : "Copy all"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Side Peek ── */
+function SidePeek({ task, onSave, onCancel, hires }) {
+  const [form, setForm] = useState({ ...task });
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const propRow = {
+    display: "flex", alignItems: "center", padding: "10px 0",
+    borderBottom: "1px solid var(--border)", fontSize: 13,
+  };
+  const lbl = {
+    width: 140, display: "flex", alignItems: "center", gap: 8,
+    color: "var(--text-secondary)", fontSize: 13, flexShrink: 0,
+  };
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 2000, display: "flex",
+      justifyContent: "flex-end", background: "rgba(15,15,15,0.6)",
+    }} onClick={onCancel}>
+      <div style={{
+        width: 520, maxWidth: "90vw", background: "#fff", height: "100%",
+        overflowY: "auto", animation: "slideIn 200ms ease-out", padding: "20px 32px 40px",
+      }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+          <button onClick={onCancel} style={{
+            background: "transparent", border: "none", cursor: "pointer",
+            padding: 4, borderRadius: 4, transition: "background 20ms ease-in",
+          }}
+            onMouseEnter={e => e.currentTarget.style.background = "var(--hover-bg)"}
+            onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+          ><Icon name="x" size={18}/></button>
+        </div>
+        <input value={form.title} onChange={e => set("title", e.target.value)} style={{
+          width: "100%", border: "none", outline: "none", background: "transparent",
+          fontFamily: "var(--font-title)", fontSize: 32, fontWeight: 700,
+          color: "var(--text)", marginBottom: 20, lineHeight: 1.2,
+        }}/>
+        <div>
+          <div style={propRow}>
+            <div style={lbl}><Icon name="flag" size={14}/> Status</div>
+            <NSelect value={form.status} options={STATUSES} styleMap={STATUS_STYLES} onChange={v => set("status", v)}/>
+          </div>
+          <div style={propRow}>
+            <div style={lbl}><Icon name="alert" size={14}/> Priority</div>
+            <NSelect value={form.priority} options={PRIORITIES} styleMap={PRIORITY_STYLES} onChange={v => set("priority", v)}/>
+          </div>
+          <div style={propRow}>
+            <div style={lbl}><Icon name="timeline" size={14}/> Phase</div>
+            <NSelect value={form.phase} options={PHASES} phaseMode onChange={v => set("phase", v)}/>
+          </div>
+          <div style={propRow}>
+            <div style={lbl}><Icon name="users" size={14}/> New Hire</div>
+            <select value={form.hire} onChange={e => set("hire", e.target.value)} style={{
+              border: "none", outline: "none", background: "transparent",
+              fontSize: 13, color: "var(--text)", cursor: "pointer", padding: "2px 4px",
+            }}>
+              {hires.map(h => <option key={h} value={h}>{h}</option>)}
+            </select>
+          </div>
+          <div style={propRow}>
+            <div style={lbl}><Icon name="users" size={14}/> Assignee</div>
+            <input value={form.assignee} onChange={e => set("assignee", e.target.value)}
+              placeholder="Assign..." style={{
+              border: "none", outline: "none", background: "transparent",
+              fontSize: 13, color: "var(--text)", flex: 1,
+            }}/>
+          </div>
+          <div style={propRow}>
+            <div style={lbl}><Icon name="calendar" size={14}/> Due date</div>
+            <input type="date" value={form.due} onChange={e => set("due", e.target.value)} style={{
+              border: "none", outline: "none", background: "transparent",
+              fontSize: 13, color: "var(--text)", cursor: "pointer",
+            }}/>
+          </div>
+        </div>
+        <div style={{ marginTop: 20 }}>
+          <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 6 }}>Notes</div>
+          <textarea value={form.notes} onChange={e => set("notes", e.target.value)}
+            rows={5} placeholder="Add notes..." style={{
+            width: "100%", border: "1px solid var(--border)", borderRadius: 4,
+            padding: "8px 10px", fontSize: 13, color: "var(--text)", resize: "vertical",
+            outline: "none", fontFamily: "var(--font)",
+          }}/>
+        </div>
+        {/* Email Templates */}
+        <EmailTemplatePanel task={form}/>
+
+        <div style={{ display: "flex", gap: 8, marginTop: 24 }}>
+          <button onClick={() => onSave(form)} style={{
+            background: "var(--blue)", color: "#fff", border: "none", borderRadius: 4,
+            padding: "6px 16px", fontSize: 13, cursor: "pointer", fontWeight: 500,
+            transition: "background 20ms ease-in",
+          }}
+            onMouseEnter={e => e.currentTarget.style.background = "var(--blue-hover)"}
+            onMouseLeave={e => e.currentTarget.style.background = "var(--blue)"}
+          >Save</button>
+          <button onClick={onCancel} style={{
+            background: "transparent", color: "var(--text)", border: "1px solid var(--border)",
+            borderRadius: 4, padding: "6px 16px", fontSize: 13, cursor: "pointer",
+            transition: "background 20ms ease-in",
+          }}
+            onMouseEnter={e => e.currentTarget.style.background = "var(--hover-bg)"}
+            onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+          >Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Dashboard ── */
+function DashboardView({ tasks }) {
+  const total = tasks.length;
+  const done = tasks.filter(t => t.status === "Done").length;
+  const inProg = tasks.filter(t => t.status === "In progress").length;
+  const overdue = tasks.filter(t => isOverdue(t)).length;
+  const statusCounts = STATUSES.map(s => ({ label: s, count: tasks.filter(t => t.status === s).length }));
+  const hires = [...new Set(tasks.map(t => t.hire))];
+
+  const donutSize = 160, donutR = 58, donutStroke = 22;
+  const circ = 2 * Math.PI * donutR;
+  let offset = 0;
+  const segs = statusCounts.map(s => {
+    const pct = total > 0 ? s.count / total : 0;
+    const seg = { ...s, pct, offset, len: pct * circ };
+    offset += seg.len;
+    return seg;
+  });
+
+  const statCards = [
+    { label: "Total tasks", value: total, icon: "clipboardList", color: "var(--blue)" },
+    { label: "Completed", value: done, icon: "checkCircle", color: "var(--green)" },
+    { label: "In progress", value: inProg, icon: "clock", color: "var(--blue)" },
+    { label: "Overdue", value: overdue, icon: "alert", color: "var(--red)" },
+  ];
+
+  return (
+    <div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 28 }}>
+        {statCards.map(c => (
+          <div key={c.label} style={{ padding: "16px 18px", borderRadius: 4, boxShadow: "var(--card-shadow)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+              <Icon name={c.icon} size={16} color={c.color}/>
+              <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{c.label}</span>
+            </div>
+            <div style={{ fontSize: 28, fontWeight: 700, color: "var(--text)" }}>{c.value}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 28 }}>
+        <div style={{ boxShadow: "var(--card-shadow)", borderRadius: 4, padding: 20 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>Status overview</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
+            <svg width={donutSize} height={donutSize} viewBox={`0 0 ${donutSize} ${donutSize}`}>
+              {segs.map(s => {
+                const strokeColor = s.label === "Not started" ? "#d8d8d5" : STATUS_STYLES[s.label].color;
+                return (
+                  <circle key={s.label} cx={donutSize/2} cy={donutSize/2} r={donutR}
+                    fill="none" stroke={strokeColor} strokeWidth={donutStroke}
+                    strokeDasharray={`${s.len} ${circ - s.len}`}
+                    strokeDashoffset={-s.offset}
+                    transform={`rotate(-90 ${donutSize/2} ${donutSize/2})`}/>
+                );
+              })}
+              <text x={donutSize/2} y={donutSize/2 - 6} textAnchor="middle"
+                fontSize="24" fontWeight="700" fill="var(--text)">
+                {total > 0 ? Math.round(done / total * 100) : 0}%
+              </text>
+              <text x={donutSize/2} y={donutSize/2 + 14} textAnchor="middle"
+                fontSize="11" fill="var(--text-secondary)">complete</text>
+            </svg>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {statusCounts.map(s => (
+                <div key={s.label} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: 2, background: STATUS_STYLES[s.label].color }}/>
+                  <span style={{ color: "var(--text-secondary)", minWidth: 80 }}>{s.label}</span>
+                  <span style={{ fontWeight: 600 }}>{s.count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ boxShadow: "var(--card-shadow)", borderRadius: 4, padding: 20 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>Phase progress</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {PHASES.map(p => {
+              const pt = tasks.filter(t => t.phase === p);
+              const pd = pt.filter(t => t.status === "Done").length;
+              const pct = pt.length > 0 ? pd / pt.length * 100 : 0;
+              return (
+                <div key={p}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
+                    <span style={{ color: PHASE_COLORS[p], fontWeight: 500 }}>{p}</span>
+                    <span style={{ color: "var(--text-light)" }}>{pd}/{pt.length}</span>
+                  </div>
+                  <div style={{ height: 6, background: "var(--light-bg)", borderRadius: 3 }}>
+                    <div style={{ height: "100%", borderRadius: 3, width: pct + "%", background: PHASE_COLORS[p], transition: "width 300ms" }}/>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ boxShadow: "var(--card-shadow)", borderRadius: 4, padding: 20 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>New hire progress</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {hires.map(h => {
+            const ht = tasks.filter(t => t.hire === h);
+            const hd = ht.filter(t => t.status === "Done").length;
+            const pct = ht.length > 0 ? hd / ht.length * 100 : 0;
+            return (
+              <div key={h}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 4 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{
+                      width: 22, height: 22, borderRadius: "50%", background: "#e3e2e0",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 10, fontWeight: 600, color: "var(--text-secondary)",
+                    }}>{h.split(" ").map(n => n[0]).join("")}</div>
+                    <span>{h}</span>
+                  </div>
+                  <span style={{ color: "var(--text-light)", fontSize: 12 }}>{hd}/{ht.length} ({Math.round(pct)}%)</span>
+                </div>
+                <div style={{ height: 6, background: "var(--light-bg)", borderRadius: 3 }}>
+                  <div style={{ height: "100%", borderRadius: 3, width: pct + "%", background: "var(--blue)", transition: "width 300ms" }}/>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Table View ── */
+function TableView({ tasks, onUpdate, onDelete, onEdit }) {
+  const [sortKey, setSortKey] = useState(null);
+  const [sortDir, setSortDir] = useState("asc");
+  const toggleSort = (key) => {
+    if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortKey(key); setSortDir("asc"); }
+  };
+  const prioOrder = { High: 0, Medium: 1, Low: 2 };
+  const sorted = useMemo(() => {
+    if (!sortKey) return tasks;
+    return [...tasks].sort((a, b) => {
+      let va = a[sortKey], vb = b[sortKey];
+      if (sortKey === "priority") { va = prioOrder[va]; vb = prioOrder[vb]; }
+      if (va < vb) return sortDir === "asc" ? -1 : 1;
+      if (va > vb) return sortDir === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [tasks, sortKey, sortDir]);
+
+  const thStyle = (sortable) => ({
+    textAlign: "left", padding: "8px 10px", borderBottom: "1px solid var(--border)",
+    background: "var(--light-bg)", fontSize: 12, fontWeight: 400,
+    color: "var(--text-secondary)", whiteSpace: "nowrap",
+    cursor: sortable ? "pointer" : "default", userSelect: "none",
+  });
+
+  return (
+    <div style={{ border: "1px solid var(--border)", overflow: "auto" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, tableLayout: "auto" }}>
+        <thead>
+          <tr>
+            <th style={{ ...thStyle(true), minWidth: 200 }} onClick={() => toggleSort("title")}>
+              Title {sortKey === "title" && (sortDir === "asc" ? "\u2191" : "\u2193")}
+            </th>
+            <th style={{ ...thStyle(false), width: 130 }}>Status</th>
+            <th style={{ ...thStyle(true), width: 110 }} onClick={() => toggleSort("priority")}>
+              Priority {sortKey === "priority" && (sortDir === "asc" ? "\u2191" : "\u2193")}
+            </th>
+            <th style={{ ...thStyle(false), width: 120 }}>Phase</th>
+            <th style={{ ...thStyle(false), width: 120 }}>New Hire</th>
+            <th style={{ ...thStyle(false), width: 110 }}>Assignee</th>
+            <th style={{ ...thStyle(true), width: 110 }} onClick={() => toggleSort("due")}>
+              Due date {sortKey === "due" && (sortDir === "asc" ? "\u2191" : "\u2193")}
+            </th>
+            <th style={{ ...thStyle(false), width: 40 }}></th>
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map(task => {
+            const od = isOverdue(task);
+            const isDone = task.status === "Done";
+            return (
+              <tr key={task.id} style={{ transition: "background 20ms ease-in" }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.background = "var(--light-bg)";
+                  const btn = e.currentTarget.querySelector(".del-btn");
+                  if (btn) btn.style.opacity = "0.4";
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.background = "";
+                  const btn = e.currentTarget.querySelector(".del-btn");
+                  if (btn) btn.style.opacity = "0";
+                }}
+              >
+                <td style={{
+                  padding: "8px 10px", borderBottom: "1px solid var(--border)", cursor: "pointer",
+                  textDecoration: isDone ? "line-through" : "none",
+                  color: isDone ? "var(--text-light)" : "var(--text)",
+                }} onClick={() => onEdit(task)}>{task.title}</td>
+                <td style={{ padding: "6px 10px", borderBottom: "1px solid var(--border)" }}>
+                  <NSelect value={task.status} options={STATUSES} styleMap={STATUS_STYLES}
+                    onChange={v => onUpdate(task.id, "status", v)}/>
+                </td>
+                <td style={{ padding: "6px 10px", borderBottom: "1px solid var(--border)" }}>
+                  <NSelect value={task.priority} options={PRIORITIES} styleMap={PRIORITY_STYLES}
+                    onChange={v => onUpdate(task.id, "priority", v)}/>
+                </td>
+                <td style={{ padding: "6px 10px", borderBottom: "1px solid var(--border)" }}>
+                  <PhaseTag label={task.phase} small/>
+                </td>
+                <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--border)", fontSize: 13 }}>{task.hire}</td>
+                <td style={{
+                  padding: "8px 10px", borderBottom: "1px solid var(--border)", fontSize: 13,
+                  color: task.assignee ? "var(--text)" : "var(--text-light)",
+                }}>{task.assignee || "\u2014"}</td>
+                <td style={{
+                  padding: "8px 10px", borderBottom: "1px solid var(--border)", fontSize: 12,
+                  color: od ? "var(--red)" : isDone ? "var(--text-light)" : "var(--text-secondary)",
+                  fontWeight: od ? 500 : 400,
+                }}>{task.due || "\u2014"}</td>
+                <td style={{ padding: "4px 6px", borderBottom: "1px solid var(--border)", textAlign: "center" }}>
+                  <button className="del-btn" onClick={(e) => { e.stopPropagation(); onDelete(task.id); }}
+                    style={{
+                      background: "transparent", border: "none", cursor: "pointer", padding: 4,
+                      borderRadius: 4, opacity: 0, transition: "opacity 100ms, background 20ms ease-in",
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.opacity = "1"; e.currentTarget.style.background = "var(--hover-bg)"; }}
+                    onMouseLeave={e => { e.currentTarget.style.opacity = "0.4"; e.currentTarget.style.background = "transparent"; }}
+                  ><Icon name="trash" size={14} color="var(--text-secondary)"/></button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/* ── Kanban ── */
+function KanbanView({ tasks, onUpdate, onEdit }) {
+  const [dragId, setDragId] = useState(null);
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: `repeat(${STATUSES.length}, 1fr)`, gap: 10, minHeight: 400, alignItems: "start" }}>
+      {STATUSES.map(status => {
+        const col = tasks.filter(t => t.status === status);
+        return (
+          <div key={status}
+            onDragOver={e => e.preventDefault()}
+            onDrop={e => { e.preventDefault(); if (dragId) { onUpdate(dragId, "status", status); setDragId(null); } }}
+            style={{ minWidth: 0, background: "var(--light-bg)", borderRadius: 4, padding: 6 }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 6px", marginBottom: 4 }}>
+              <Tag label={status} styleMap={STATUS_STYLES}/>
+              <span style={{ fontSize: 12, color: "var(--text-light)" }}>{col.length}</span>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {col.map(task => (
+                <div key={task.id} draggable
+                  onDragStart={e => { setDragId(task.id); e.dataTransfer.effectAllowed = "move"; }}
+                  onClick={() => onEdit(task)}
+                  style={{
+                    background: "#fff", borderRadius: 4, padding: "10px 12px",
+                    cursor: "grab", boxShadow: "var(--card-shadow)",
+                    transition: "background 20ms ease-in",
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = "var(--light-bg)"}
+                  onMouseLeave={e => e.currentTarget.style.background = "#fff"}
+                >
+                  <div style={{
+                    fontSize: 13, marginBottom: 8,
+                    color: task.status === "Done" ? "var(--text-light)" : "var(--text)",
+                    textDecoration: task.status === "Done" ? "line-through" : "none",
+                  }}>{task.title}</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 6 }}>
+                    <PhaseTag label={task.phase} small/>
+                    <Tag label={task.priority} styleMap={PRIORITY_STYLES} small/>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, color: "var(--text-secondary)" }}>
+                    <span>{task.hire}</span>
+                    <span style={{ color: isOverdue(task) ? "var(--red)" : "var(--text-light)", fontSize: 11 }}>{task.due}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ── Gantt / Timeline (fits one page) ── */
+function GanttView({ tasks, onUpdate, onEdit }) {
+  const hires = [...new Set(tasks.map(t => t.hire))];
+  const [expanded, setExpanded] = useState(() => {
+    const s = {};
+    hires.forEach(h => s[h] = true);
+    return s;
+  });
+
+  const allDates = tasks.filter(t => t.due).map(t => new Date(t.due + "T00:00:00").getTime());
+  const td = todayStr();
+  const todayMs = new Date(td + "T00:00:00").getTime();
+  allDates.push(todayMs);
+  if (allDates.length === 0) return <div style={{ padding: 20, color: "var(--text-secondary)" }}>No tasks with due dates.</div>;
+
+  const minMs = Math.min(...allDates) - 86400000 * 7;
+  const maxMs = Math.max(...allDates) + 86400000 * 7;
+  const totalDays = Math.max(1, Math.ceil((maxMs - minMs) / 86400000));
+
+  // Percentage-based positioning (fits any width)
+  const getPct = (ds) => {
+    const d = new Date(ds + "T00:00:00").getTime();
+    return ((d - minMs) / (maxMs - minMs)) * 100;
+  };
+  const todayPct = getPct(td);
+
+  // Build month labels
+  const months = [];
+  const cursor = new Date(minMs);
+  cursor.setDate(1);
+  while (cursor.getTime() <= maxMs) {
+    const mStart = Math.max(cursor.getTime(), minMs);
+    const nextMonth = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
+    const mEnd = Math.min(nextMonth.getTime(), maxMs);
+    const leftPct = ((mStart - minMs) / (maxMs - minMs)) * 100;
+    const widthPct = ((mEnd - mStart) / (maxMs - minMs)) * 100;
+    if (widthPct > 0) {
+      months.push({
+        label: cursor.toLocaleDateString("en-US", { month: "short", year: "numeric" }),
+        left: leftPct, width: widthPct,
+      });
+    }
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+
+  // Build week lines
+  const weekLines = [];
+  const wCursor = new Date(minMs);
+  wCursor.setDate(wCursor.getDate() - wCursor.getDay() + 1); // Monday
+  while (wCursor.getTime() <= maxMs) {
+    const pct = ((wCursor.getTime() - minMs) / (maxMs - minMs)) * 100;
+    if (pct > 0 && pct < 100) weekLines.push(pct);
+    wCursor.setDate(wCursor.getDate() + 7);
+  }
+
+  const rowH = 28;
+  const hireRowH = 32;
+  const labelW = 220;
+
+  return (
+    <div style={{ border: "1px solid var(--border)", borderRadius: 4, overflow: "hidden", background: "#fff" }}>
+      {/* Header row */}
+      <div style={{ display: "flex", borderBottom: "1px solid var(--border)" }}>
+        <div style={{
+          width: labelW, flexShrink: 0, padding: "6px 10px", fontSize: 12,
+          color: "var(--text-secondary)", borderRight: "1px solid var(--border)",
+          background: "var(--light-bg)", fontWeight: 500,
+        }}>Employee / Task</div>
+        <div style={{ flex: 1, position: "relative", height: 32, background: "var(--light-bg)" }}>
+          {months.map((m, i) => (
+            <div key={i} style={{
+              position: "absolute", left: m.left + "%", width: m.width + "%", height: "100%",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 11, color: "var(--text-secondary)", fontWeight: 500,
+              borderRight: "1px solid var(--border)", overflow: "hidden", whiteSpace: "nowrap",
+            }}>{m.label}</div>
+          ))}
+        </div>
+      </div>
+
+      {/* Rows */}
+      {hires.map(h => {
+        const ht = tasks.filter(t => t.hire === h).sort((a, b) => (a.due || "z").localeCompare(b.due || "z"));
+        const hd = ht.filter(t => t.status === "Done").length;
+        const isExp = expanded[h];
+
+        return (
+          <React.Fragment key={h}>
+            {/* Hire header row */}
+            <div style={{ display: "flex", borderBottom: "1px solid var(--border)", cursor: "pointer" }}
+              onClick={() => setExpanded(e => ({ ...e, [h]: !e[h] }))}>
+              <div style={{
+                width: labelW, flexShrink: 0, height: hireRowH, display: "flex", alignItems: "center",
+                gap: 6, padding: "0 10px", borderRight: "1px solid var(--border)",
+                fontSize: 13, fontWeight: 500, background: "var(--light-bg)",
+                transition: "background 20ms ease-in",
+              }}
+                onMouseEnter={e => e.currentTarget.style.background = "var(--hover-bg)"}
+                onMouseLeave={e => e.currentTarget.style.background = "var(--light-bg)"}
+              >
+                <Icon name={isExp ? "chevronDown" : "chevronRight"} size={11}/>
+                <div style={{
+                  width: 20, height: 20, borderRadius: "50%", background: "#e3e2e0",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 9, fontWeight: 600, color: "var(--text-secondary)", flexShrink: 0,
+                }}>{h.split(" ").map(n => n[0]).join("")}</div>
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{h}</span>
+                <span style={{ fontSize: 11, color: "var(--text-light)", flexShrink: 0 }}>{hd}/{ht.length}</span>
+              </div>
+              <div style={{ flex: 1, position: "relative", height: hireRowH, background: "var(--light-bg)" }}>
+                {/* Week grid lines */}
+                {weekLines.map((pct, i) => (
+                  <div key={i} style={{ position: "absolute", left: pct + "%", top: 0, bottom: 0, width: 1, background: "#f0f0ee", pointerEvents: "none" }}/>
+                ))}
+                {/* Today line */}
+                <div style={{ position: "absolute", left: todayPct + "%", top: 0, bottom: 0, width: 2, background: "var(--red)", opacity: 0.4, zIndex: 2, pointerEvents: "none" }}/>
+                {/* Summary bar for collapsed */}
+                {!isExp && ht.length > 0 && (() => {
+                  const dates = ht.filter(t => t.due).map(t => t.due).sort();
+                  if (dates.length === 0) return null;
+                  const startPct = getPct(dates[0]);
+                  const endPct = getPct(dates[dates.length - 1]);
+                  const donePct = ht.length ? (hd / ht.length) * (endPct - startPct) : 0;
+                  return (
+                    <>
+                      <div style={{
+                        position: "absolute", top: 8, height: 16, borderRadius: 8,
+                        left: startPct + "%", width: Math.max(endPct - startPct, 1) + "%",
+                        background: "#e3e2e0",
+                      }}/>
+                      <div style={{
+                        position: "absolute", top: 8, height: 16, borderRadius: 8,
+                        left: startPct + "%", width: Math.max(donePct, 0) + "%",
+                        background: "var(--green)", opacity: 0.6,
+                      }}/>
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+
+            {/* Task rows */}
+            {isExp && ht.map(t => {
+              const phaseCol = PHASE_COLORS[t.phase] || "#999";
+              const isDone = t.status === "Done";
+              const od = isOverdue(t);
+              return (
+                <div key={t.id} style={{ display: "flex", borderBottom: "1px solid var(--border)" }}>
+                  <div style={{
+                    width: labelW, flexShrink: 0, height: rowH, display: "flex", alignItems: "center",
+                    gap: 6, padding: "0 10px 0 32px", borderRight: "1px solid var(--border)",
+                    fontSize: 12, overflow: "hidden",
+                  }}>
+                    <input type="checkbox" checked={isDone}
+                      onChange={() => onUpdate(t.id, "status", isDone ? "Not started" : "Done")}
+                      style={{ accentColor: "var(--blue)", cursor: "pointer", flexShrink: 0 }}/>
+                    <span onClick={() => onEdit && onEdit(t)} style={{
+                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                      cursor: onEdit ? "pointer" : "default",
+                      color: isDone ? "var(--text-light)" : od ? "var(--red)" : "var(--text)",
+                      textDecoration: isDone ? "line-through" : "none",
+                    }}
+                      onMouseEnter={e => { if (onEdit && !isDone) e.currentTarget.style.textDecoration = "underline"; }}
+                      onMouseLeave={e => { e.currentTarget.style.textDecoration = isDone ? "line-through" : "none"; }}
+                    >{t.title}</span>
+                  </div>
+                  <div style={{ flex: 1, position: "relative", height: rowH }}>
+                    {/* Week grid lines */}
+                    {weekLines.map((pct, i) => (
+                      <div key={i} style={{ position: "absolute", left: pct + "%", top: 0, bottom: 0, width: 1, background: "#f5f5f3", pointerEvents: "none" }}/>
+                    ))}
+                    {/* Today line */}
+                    <div style={{ position: "absolute", left: todayPct + "%", top: 0, bottom: 0, width: 2, background: "var(--red)", opacity: 0.3, zIndex: 2, pointerEvents: "none" }}/>
+                    {/* Task bar */}
+                    {t.due && (() => {
+                      const leftPct = getPct(t.due);
+                      const barW = Math.max(100 / totalDays * 5, 2); // at least 5 days wide visually
+                      return (
+                        <div title={`${t.title} — ${t.due}`} style={{
+                          position: "absolute", top: 5, height: 18, borderRadius: 4,
+                          left: `calc(${leftPct}% - ${barW/2}%)`, width: barW + "%",
+                          background: isDone ? "#dbeddb" : phaseCol + (od ? "60" : "30"),
+                          border: `1.5px solid ${isDone ? "#0f7b6c50" : od ? "var(--red)" + "80" : phaseCol + "70"}`,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          fontSize: 9, color: isDone ? "var(--green)" : phaseCol,
+                          fontWeight: 600, overflow: "hidden", whiteSpace: "nowrap",
+                          cursor: "default",
+                        }}>
+                          {barW > 4 && <span style={{ padding: "0 3px", opacity: 0.8 }}>
+                            {new Date(t.due + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                          </span>}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              );
+            })}
+          </React.Fragment>
+        );
+      })}
+
+      {/* Legend */}
+      <div style={{
+        display: "flex", gap: 14, padding: "8px 12px", flexWrap: "wrap",
+        borderTop: "1px solid var(--border)", background: "var(--light-bg)",
+      }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--text-secondary)" }}>
+          <div style={{ width: 2, height: 12, background: "var(--red)", opacity: 0.5 }}/> Today
+        </span>
+        {PHASES.map(p => (
+          <span key={p} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--text-secondary)" }}>
+            <div style={{ width: 14, height: 8, borderRadius: 2, background: PHASE_COLORS[p] + "50", border: `1px solid ${PHASE_COLORS[p]}70` }}/> {p}
+          </span>
+        ))}
+        <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--text-secondary)" }}>
+          <div style={{ width: 14, height: 8, borderRadius: 2, background: "#dbeddb", border: "1px solid #0f7b6c50" }}/> Done
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/* ── Import Modal ── */
+function ImportModal({ onClose, onImport }) {
+  const [data, setData] = useState(null);
+  const [fileName, setFileName] = useState("");
+  const [mapping, setMapping] = useState({});
+  const [mode, setMode] = useState("replace");
+  const fields = ["title", "status", "priority", "phase", "hire", "assignee", "due", "notes"];
+
+  const handleFile = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target.result;
+      const lines = text.split(/\r?\n/).filter(l => l.trim());
+      if (lines.length < 2) return;
+      const sep = lines[0].includes("\t") ? "\t" : ",";
+      const headers = lines[0].split(sep).map(h => h.trim().replace(/^"|"$/g, ""));
+      const rows = lines.slice(1).map(l => {
+        const vals = l.split(sep).map(v => v.trim().replace(/^"|"$/g, ""));
+        const obj = {};
+        headers.forEach((h, i) => obj[h] = vals[i] || "");
+        return obj;
+      });
+      setData({ headers, rows });
+      const m = {};
+      fields.forEach(f => {
+        const match = headers.find(h => h.toLowerCase().replace(/[_\s]/g, "") === f.toLowerCase());
+        if (match) m[f] = match;
+        else {
+          const partial = headers.find(h => h.toLowerCase().includes(f.toLowerCase()));
+          if (partial) m[f] = partial;
+        }
+      });
+      setMapping(m);
+    };
+    reader.readAsText(file);
+  };
+
+  const doImport = () => {
+    if (!data) return;
+    const imported = data.rows.map(row => ({
+      id: genId(),
+      title: row[mapping.title] || "Untitled",
+      status: STATUSES.includes(row[mapping.status]) ? row[mapping.status] : "Not started",
+      priority: PRIORITIES.includes(row[mapping.priority]) ? row[mapping.priority] : "Medium",
+      phase: PHASES.includes(row[mapping.phase]) ? row[mapping.phase] : "Pre-boarding",
+      hire: row[mapping.hire] || "Unassigned",
+      assignee: row[mapping.assignee] || "",
+      due: row[mapping.due] || "",
+      notes: row[mapping.notes] || "",
+    }));
+    onImport(imported, mode);
+    onClose();
+  };
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 3000, display: "flex",
+      alignItems: "center", justifyContent: "center", background: "rgba(15,15,15,0.6)",
+    }} onClick={onClose}>
+      <div style={{
+        background: "#fff", borderRadius: 6, width: 600, maxWidth: "95vw",
+        maxHeight: "85vh", overflow: "auto", boxShadow: "var(--popover-shadow)", padding: 24,
+      }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <div style={{ fontSize: 16, fontWeight: 600 }}>Import from CSV / Excel</div>
+          <button onClick={onClose} style={{
+            background: "transparent", border: "none", cursor: "pointer", padding: 4, borderRadius: 4,
+          }}><Icon name="x" size={18}/></button>
+        </div>
+        <div style={{
+          border: "2px dashed var(--border)", borderRadius: 6, padding: 24,
+          textAlign: "center", marginBottom: 16,
+        }}>
+          <Icon name="upload" size={24} color="var(--text-light)"/>
+          <div style={{ fontSize: 13, color: "var(--text-secondary)", margin: "8px 0" }}>
+            {fileName || "Choose a CSV or TSV file"}
+          </div>
+          <label style={{
+            background: "var(--blue)", color: "#fff", padding: "6px 14px",
+            borderRadius: 4, fontSize: 13, cursor: "pointer", display: "inline-block",
+          }}>
+            Browse
+            <input type="file" accept=".csv,.tsv,.txt" onChange={handleFile} style={{ display: "none" }}/>
+          </label>
+        </div>
+        {data && (
+          <>
+            <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 12 }}>
+              {data.rows.length} rows, {data.headers.length} columns detected
+            </div>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Column mapping</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
+              {fields.map(f => (
+                <div key={f} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 12, color: "var(--text-secondary)", width: 70, textTransform: "capitalize" }}>{f}</span>
+                  <select value={mapping[f] || ""} onChange={e => setMapping(m => ({ ...m, [f]: e.target.value }))} style={{
+                    flex: 1, border: "1px solid var(--border)", borderRadius: 4,
+                    padding: "4px 6px", fontSize: 12, outline: "none", background: "#fff",
+                  }}>
+                    <option value="">-- skip --</option>
+                    {data.headers.map(h => <option key={h} value={h}>{h}</option>)}
+                  </select>
+                </div>
+              ))}
+            </div>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Preview (first 3 rows)</div>
+            <div style={{ overflowX: "auto", marginBottom: 16 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                <thead>
+                  <tr>{data.headers.map(h => (
+                    <th key={h} style={{
+                      padding: "4px 8px", borderBottom: "1px solid var(--border)",
+                      textAlign: "left", color: "var(--text-secondary)", fontWeight: 400, whiteSpace: "nowrap",
+                    }}>{h}</th>
+                  ))}</tr>
+                </thead>
+                <tbody>
+                  {data.rows.slice(0, 3).map((row, i) => (
+                    <tr key={i}>{data.headers.map(h => (
+                      <td key={h} style={{
+                        padding: "4px 8px", borderBottom: "1px solid var(--border)",
+                        whiteSpace: "nowrap", maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis",
+                      }}>{row[h]}</td>
+                    ))}</tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Import mode</div>
+            <div style={{ display: "flex", gap: 16, marginBottom: 20 }}>
+              {[["replace", "Replace all"], ["add", "Add to existing"]].map(([v, l]) => (
+                <label key={v} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
+                  <input type="radio" name="importmode" checked={mode === v}
+                    onChange={() => setMode(v)} style={{ accentColor: "var(--blue)" }}/>
+                  {l}
+                </label>
+              ))}
+            </div>
+            <button onClick={doImport} style={{
+              background: "var(--blue)", color: "#fff", border: "none", borderRadius: 4,
+              padding: "8px 20px", fontSize: 13, cursor: "pointer", fontWeight: 500,
+            }}>Import {data.rows.length} tasks</button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ── Sidebar Button ── */
+function SideBtn({ icon, children, active, onClick, count, style: extraStyle }) {
+  const [hov, setHov] = useState(false);
+  return (
+    <button onClick={onClick} style={{
+      display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "5px 8px",
+      border: "none", borderRadius: 4, fontSize: 13, cursor: "pointer", textAlign: "left",
+      background: active ? "var(--active-bg)" : hov ? "var(--hover-bg)" : "transparent",
+      color: active ? "var(--text)" : "var(--text-secondary)",
+      transition: "background 20ms ease-in", ...extraStyle,
+    }}
+      onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+    >
+      {icon}
+      <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{children}</span>
+      {count != null && <span style={{ fontSize: 11, color: "var(--text-light)" }}>{count}</span>}
+    </button>
+  );
+}
+
+/* ── Main App ── */
+/* ── Gemini AI ── */
+const GEMINI_KEY = "AIzaSyDsEfWUvuJ2-Y8VDTapFMRgp9GsJJUP_Kw";
+const GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"];
+
+async function askGemini(prompt, systemInstruction, retries = 2) {
+  for (let mi = 0; mi < GEMINI_MODELS.length; mi++) {
+    const model = GEMINI_MODELS[mi];
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_KEY}`;
+    const body = { contents: [{ parts: [{ text: prompt }] }] };
+    if (systemInstruction) {
+      body.systemInstruction = { parts: [{ text: systemInstruction }] };
+    }
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        if (attempt > 0) await new Promise(r => setTimeout(r, 2000 * attempt));
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (res.status === 429) {
+          if (attempt < retries) continue;
+          if (mi < GEMINI_MODELS.length - 1) break; // try next model
+          throw new Error("Rate limited — free tier quota reached. Please wait a minute and try again.");
+        }
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error?.message || `API error ${res.status}`);
+        }
+        const data = await res.json();
+        return data.candidates?.[0]?.content?.parts?.[0]?.text || "No response received.";
+      } catch (e) {
+        if (attempt === retries && mi === GEMINI_MODELS.length - 1) throw e;
+        if (e.message.includes("Rate limited")) throw e;
+      }
+    }
+  }
+  throw new Error("All models failed. Please try again later.");
+}
+
+const AI_SYSTEM = `You are an expert HR assistant embedded in an EE Probation Tracker tool. You help with:
+- Managing employee probation periods (30/60/90-day reviews)
+- Creating onboarding and probation task lists for new hires
+- HR compliance (E-Verify, I-9, background checks, Concentra screenings)
+- Performance review guidance and probation clearance decisions
+- At-risk employee management strategies
+- Training program recommendations
+Keep responses concise, practical, and actionable. Use bullet points when listing items. Format responses in plain text (no markdown headers).`;
+
+/* ── AI Chat Panel ── */
+function AIChatPanel({ open, onClose, tasks, onAddTasks }) {
+  const [messages, setMessages] = useState([
+    { role: "ai", text: "Hi! I'm your AI onboarding assistant. I can help you with:\n\n• Generate onboarding tasks for a new hire\n• Answer HR onboarding questions\n• Suggest improvements to your process\n• Create training schedules\n\nWhat would you like help with?" }
+  ]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const scrollRef = useRef(null);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [messages]);
+
+  useEffect(() => {
+    if (open && inputRef.current) inputRef.current.focus();
+  }, [open]);
+
+  const taskContext = useMemo(() => {
+    const total = tasks.length;
+    const done = tasks.filter(t => t.status === "Done").length;
+    const overdue = tasks.filter(t => isOverdue(t)).length;
+    const hires = [...new Set(tasks.map(t => t.hire))];
+    return `Current onboarding state: ${total} tasks, ${done} done, ${overdue} overdue. Active hires: ${hires.join(", ")}.`;
+  }, [tasks]);
+
+  const sendMessage = async () => {
+    const q = input.trim();
+    if (!q || loading) return;
+    setInput("");
+    setMessages(m => [...m, { role: "user", text: q }]);
+    setLoading(true);
+    try {
+      const prompt = taskContext + "\n\nUser question: " + q;
+      const reply = await askGemini(prompt, AI_SYSTEM);
+      setMessages(m => [...m, { role: "ai", text: reply }]);
+    } catch (err) {
+      setMessages(m => [...m, { role: "ai", text: "⚠ " + (err.message || "Something went wrong. Please try again.") }]);
+    }
+    setLoading(false);
+  };
+
+  if (!open) return null;
+
+  return (
+    <div style={{
+      position: "fixed", bottom: 20, right: 20, width: 400, maxWidth: "calc(100vw - 40px)",
+      height: 520, maxHeight: "calc(100vh - 80px)",
+      background: "#fff", borderRadius: 8, display: "flex", flexDirection: "column",
+      boxShadow: "0 0 0 1px rgba(15,15,15,0.05), 0 5px 10px rgba(15,15,15,0.1), 0 15px 40px rgba(15,15,15,0.2)",
+      zIndex: 5000, animation: "fadeUp 150ms ease-out", overflow: "hidden",
+    }}>
+      {/* Header */}
+      <div style={{
+        padding: "12px 16px", borderBottom: "1px solid var(--border)",
+        display: "flex", alignItems: "center", gap: 8, flexShrink: 0,
+      }}>
+        <div style={{
+          width: 28, height: 28, borderRadius: 6, display: "flex", alignItems: "center",
+          justifyContent: "center", background: "linear-gradient(135deg, #8B5CF6, #2383e2)",
+        }}><Icon name="sparkle" size={15} color="#fff"/></div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>AI Assistant</div>
+          <div style={{ fontSize: 11, color: "var(--text-light)" }}>Powered by Gemini</div>
+        </div>
+        <button onClick={onClose} style={{
+          background: "transparent", border: "none", cursor: "pointer", padding: 4, borderRadius: 4,
+          transition: "background 20ms ease-in",
+        }} onMouseEnter={e => e.currentTarget.style.background = "var(--hover-bg)"}
+           onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+          <Icon name="x" size={16} color="var(--text-secondary)"/>
+        </button>
+      </div>
+
+      {/* Messages */}
+      <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: "16px" }}>
+        {messages.map((msg, i) => (
+          <div key={i} style={{
+            marginBottom: 12, display: "flex",
+            justifyContent: msg.role === "user" ? "flex-end" : "flex-start",
+          }}>
+            <div style={{
+              maxWidth: "85%", padding: "8px 12px", borderRadius: 8,
+              fontSize: 13, lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word",
+              ...(msg.role === "user"
+                ? { background: "var(--blue)", color: "#fff", borderBottomRightRadius: 2 }
+                : { background: "var(--light-bg)", color: "var(--text)", borderBottomLeftRadius: 2 }),
+            }}>{msg.text}</div>
+          </div>
+        ))}
+        {loading && (
+          <div style={{ display: "flex", gap: 4, padding: "8px 0" }}>
+            {[0,1,2].map(i => (
+              <div key={i} style={{
+                width: 8, height: 8, borderRadius: "50%", background: "var(--text-light)",
+                animation: "pulse 1s ease-in-out infinite",
+                animationDelay: `${i * 0.15}s`,
+              }}/>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Quick actions */}
+      <div style={{ padding: "0 16px 8px", display: "flex", gap: 6, flexWrap: "wrap" }}>
+        {["Generate tasks for new hire", "Onboarding best practices", "Compliance checklist"].map(q => (
+          <button key={q} onClick={() => { setInput(q); }} style={{
+            fontSize: 11, padding: "4px 10px", borderRadius: 12, cursor: "pointer",
+            border: "1px solid var(--border)", background: "#fff", color: "var(--text-secondary)",
+            transition: "background 20ms ease-in", whiteSpace: "nowrap",
+          }} onMouseEnter={e => e.currentTarget.style.background = "var(--hover-bg)"}
+             onMouseLeave={e => e.currentTarget.style.background = "#fff"}>
+            {q}
+          </button>
+        ))}
+      </div>
+
+      {/* Input */}
+      <div style={{
+        padding: "8px 12px", borderTop: "1px solid var(--border)", display: "flex", gap: 8,
+        alignItems: "flex-end", flexShrink: 0,
+      }}>
+        <textarea ref={inputRef} value={input} onChange={e => setInput(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+          placeholder="Ask about onboarding..." rows={1}
+          style={{
+            flex: 1, border: "1px solid var(--border)", borderRadius: 6, padding: "8px 10px",
+            fontSize: 13, color: "var(--text)", resize: "none", outline: "none",
+            fontFamily: "var(--font)", lineHeight: 1.4, maxHeight: 80, overflowY: "auto",
+          }}
+          onFocus={e => e.currentTarget.style.borderColor = "var(--blue)"}
+          onBlur={e => e.currentTarget.style.borderColor = "var(--border)"}
+        />
+        <button onClick={sendMessage} disabled={loading || !input.trim()} style={{
+          width: 34, height: 34, borderRadius: 6, border: "none", cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+          background: input.trim() ? "var(--blue)" : "var(--hover-bg)",
+          transition: "background 100ms ease-in",
+        }}><Icon name="send" size={15} color={input.trim() ? "#fff" : "var(--text-light)"}/></button>
+      </div>
+    </div>
+  );
+}
+
+/* ── AI Generate Tasks Modal ── */
+function AIGenerateModal({ open, onClose, onGenerate, hires }) {
+  const blankForm = {
+    name: "", eeId: "", jobTitle: "", level: "G4", manager: "", dept: "", team: "",
+    badge: "", hireDate: "", eVerify: "No", i9: "No", bgCheck: "No", concentra: "No",
+    proFlowers: "No", needsHealthIns: "Yes",
+  };
+  const [form, setForm] = useState({ ...blankForm });
+  const [step, setStep] = useState(1); // 1=info, 2=compliance, 3=preview
+  const [generated, setGenerated] = useState(null);
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const inputStyle = {
+    width: "100%", border: "1px solid var(--border)", borderRadius: 4,
+    padding: "8px 10px", fontSize: 13, outline: "none", color: "var(--text)",
+    transition: "border-color 100ms",
+  };
+  const selStyle = { ...inputStyle, cursor: "pointer", background: "#fff" };
+  const labelStyle = { fontSize: 12, color: "var(--text-secondary)", display: "block", marginBottom: 4, fontWeight: 500 };
+  const reqStar = React.createElement("span", { style: { color: "var(--red)" } }, " *");
+  const focusIn = e => e.currentTarget.style.borderColor = "var(--blue)";
+  const focusOut = e => e.currentTarget.style.borderColor = "var(--border)";
+
+  const generateTasks = () => {
+    const f = form;
+    const hire = f.hireDate || todayStr();
+    const tasks = [];
+    const p = (title, phase, priority, assignee, dueOffset, status, notes) => {
+      tasks.push({ id: genId(), title, phase, priority, status: status || "Not started", hire: f.name.trim(), assignee: assignee || "HR", due: addDays(hire, dueOffset), notes: notes || "" });
+    };
+
+    // Pre-boarding
+    p("E-Verify completion", "Pre-boarding", "High", "HR", 0, f.eVerify === "Yes" ? "Done" : "Not started", `EE ID: ${f.eeId}`);
+    p("I-9 verification", "Pre-boarding", "High", "HR", 0, f.i9 === "Yes" ? "Done" : "Not started");
+    p("Background check", "Pre-boarding", "High", "HR", 0, f.bgCheck === "Yes" ? "Done" : (f.bgCheck === "Pending" ? "In progress" : "Not started"), f.bgCheck === "Pending" ? "Pending" : "");
+    p("Concentra screening", "Pre-boarding", "High", "HR", 0, f.concentra === "Yes" ? "Done" : (f.concentra === "Pending" ? "In progress" : "Not started"), f.concentra === "Pending" ? "Pending" : "");
+    p("ProFlowers welcome gift", "Pre-boarding", "Low", "HR", -1, f.proFlowers === "Yes" ? "Done" : "Not started");
+    p("Prepare workstation & equipment", "Pre-boarding", "Medium", "IT", -2);
+    p("Create email & system accounts", "Pre-boarding", "High", "IT", -1);
+
+    // Day 1
+    p("Badge issuance", "Day 1", "Medium", "HR", 0, "Not started", `Badge: ${f.badge || f.eeId}`);
+    p("Office tour & team introduction", "Day 1", "Medium", f.manager || "HR", 0, "Not started", `Dept: ${f.dept} / Team: ${f.team}`);
+    p("Review company handbook & policies", "Day 1", "Medium", "HR", 0);
+    p("Complete tax & payroll forms", "Day 1", "High", "HR", 0);
+
+    // Week 1
+    p("Assign onboarding buddy / mentor", "Week 1", "Medium", f.manager || "HR", 2);
+    p("Schedule training sessions", "Week 1", "Medium", f.manager || "HR", 3);
+    p("Set up 1:1 with manager", "Week 1", "High", f.manager || "HR", 1);
+    p("Complete safety training", "Week 1", "Medium", "HR", 4);
+
+    // Month 1
+    p("30-day probation review", "Month 1", "High", f.manager || "HR", 30);
+    if (f.needsHealthIns === "Yes") p("Health insurance enrollment", "Month 1", "High", "HR", 60);
+    p("Complete compliance training", "Month 1", "High", "HR", 25);
+
+    // Month 3
+    p("60-day probation review", "Month 1", "High", f.manager || "HR", 60);
+    p("90-day performance review", "Month 3", "High", f.manager || "HR", 90);
+    p("Probation clearance", "Month 3", "High", "HR", 90, "Not started", `Status: On Track`);
+
+    setGenerated(tasks);
+    setStep(3);
+  };
+
+  const confirm = () => {
+    if (!generated) return;
+    onGenerate(generated, form.name.trim());
+    onClose();
+    setGenerated(null);
+    setForm({ ...blankForm });
+    setStep(1);
+  };
+
+  const reset = () => { setForm({ ...blankForm }); setStep(1); setGenerated(null); };
+
+  if (!open) return null;
+
+  const canGoStep2 = form.name.trim() && form.jobTitle.trim() && form.hireDate;
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 4000, display: "flex",
+      alignItems: "center", justifyContent: "center", background: "rgba(15,15,15,0.6)",
+    }} onClick={onClose}>
+      <div style={{
+        background: "#fff", borderRadius: 8, width: 600, maxWidth: "95vw",
+        maxHeight: "90vh", overflow: "auto", boxShadow: "var(--popover-shadow)",
+      }} onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div style={{
+          padding: "16px 20px", borderBottom: "1px solid var(--border)",
+          display: "flex", alignItems: "center", gap: 10,
+        }}>
+          <div style={{
+            width: 28, height: 28, borderRadius: 6, display: "flex", alignItems: "center",
+            justifyContent: "center", background: "linear-gradient(135deg, #8B5CF6, #2383e2)",
+          }}><Icon name="sparkle" size={15} color="#fff"/></div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 15, fontWeight: 600 }}>Add New Employee</div>
+            <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+              {step === 1 ? "Step 1 of 3 — Employee information" : step === 2 ? "Step 2 of 3 — Compliance & pre-boarding" : "Step 3 of 3 — Review generated tasks"}
+            </div>
+          </div>
+          <button onClick={onClose} style={{
+            background: "transparent", border: "none", cursor: "pointer", padding: 4, borderRadius: 4,
+          }}><Icon name="x" size={18}/></button>
+        </div>
+
+        {/* Progress bar */}
+        <div style={{ height: 3, background: "var(--border)" }}>
+          <div style={{ height: "100%", width: (step / 3 * 100) + "%", background: "var(--blue)", transition: "width 200ms ease" }}/>
+        </div>
+
+        <div style={{ padding: "20px 24px" }}>
+
+          {/* ── STEP 1: Employee Info ── */}
+          {step === 1 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", marginBottom: 2 }}>Employee Information</div>
+
+              <div style={{ display: "flex", gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={labelStyle}>Full Name{reqStar}</label>
+                  <input value={form.name} onChange={e => set("name", e.target.value)} placeholder="e.g. Sarah Kim" style={inputStyle} onFocus={focusIn} onBlur={focusOut}/>
+                </div>
+                <div style={{ width: 140 }}>
+                  <label style={labelStyle}>EE ID #</label>
+                  <input value={form.eeId} onChange={e => set("eeId", e.target.value)} placeholder="e.g. 2026008-A" style={inputStyle} onFocus={focusIn} onBlur={focusOut}/>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={labelStyle}>Job Title{reqStar}</label>
+                  <input value={form.jobTitle} onChange={e => set("jobTitle", e.target.value)} placeholder="e.g. Marketing Associate" style={inputStyle} onFocus={focusIn} onBlur={focusOut}/>
+                </div>
+                <div style={{ width: 100 }}>
+                  <label style={labelStyle}>Level</label>
+                  <select value={form.level} onChange={e => set("level", e.target.value)} style={selStyle}>
+                    <option value="G1">G1 — Senior Manager</option>
+                    <option value="G2">G2 — Manager</option>
+                    <option value="G3">G3 — Assistant Manager</option>
+                    <option value="G4">G4 — Associate</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={labelStyle}>Manager / Supervisor{reqStar}</label>
+                  <input value={form.manager} onChange={e => set("manager", e.target.value)} placeholder="e.g. Jenny Lee" style={inputStyle} onFocus={focusIn} onBlur={focusOut}/>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={labelStyle}>Department</label>
+                  <input value={form.dept} onChange={e => set("dept", e.target.value)} placeholder="e.g. Marketing" style={inputStyle} onFocus={focusIn} onBlur={focusOut}/>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={labelStyle}>Team</label>
+                  <input value={form.team} onChange={e => set("team", e.target.value)} placeholder="e.g. Brand" style={inputStyle} onFocus={focusIn} onBlur={focusOut}/>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={labelStyle}>Hiring Date{reqStar}</label>
+                  <input type="date" value={form.hireDate} onChange={e => set("hireDate", e.target.value)} style={inputStyle} onFocus={focusIn} onBlur={focusOut}/>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={labelStyle}>Badge #</label>
+                  <input value={form.badge} onChange={e => set("badge", e.target.value)} placeholder="Same as EE ID if blank" style={inputStyle} onFocus={focusIn} onBlur={focusOut}/>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 8 }}>
+                <button onClick={onClose} style={{
+                  padding: "8px 18px", borderRadius: 4, border: "1px solid var(--border)",
+                  background: "#fff", fontSize: 13, cursor: "pointer", transition: "background 20ms ease-in",
+                }} onMouseEnter={e => e.currentTarget.style.background = "var(--hover-bg)"} onMouseLeave={e => e.currentTarget.style.background = "#fff"}>Cancel</button>
+                <button onClick={() => setStep(2)} disabled={!canGoStep2} style={{
+                  padding: "8px 18px", borderRadius: 4, border: "none", fontSize: 13, fontWeight: 500,
+                  background: canGoStep2 ? "var(--blue)" : "var(--hover-bg)",
+                  color: canGoStep2 ? "#fff" : "var(--text-light)",
+                  cursor: canGoStep2 ? "pointer" : "not-allowed", transition: "background 100ms",
+                }}>Next — Compliance</button>
+              </div>
+            </div>
+          )}
+
+          {/* ── STEP 2: Compliance & Pre-boarding ── */}
+          {step === 2 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", marginBottom: 2 }}>
+                Compliance & Pre-boarding Status
+              </div>
+              <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 4 }}>
+                What's already been completed for <strong>{form.name}</strong>? This determines which tasks are marked done.
+              </div>
+
+              {[
+                { key: "eVerify", label: "E-Verify completed?", opts: ["Yes", "No"] },
+                { key: "i9", label: "I-9 form completed?", opts: ["Yes", "No"] },
+                { key: "bgCheck", label: "Background check status?", opts: ["Yes", "Pending", "No"] },
+                { key: "concentra", label: "Concentra screening status?", opts: ["Yes", "Pending", "No"] },
+                { key: "proFlowers", label: "Welcome gift (ProFlowers) sent?", opts: ["Yes", "No"] },
+                { key: "needsHealthIns", label: "Needs health insurance enrollment?", opts: ["Yes", "No"] },
+              ].map(q => (
+                <div key={q.key} style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  padding: "10px 14px", background: "var(--light-bg)", borderRadius: 6,
+                }}>
+                  <span style={{ fontSize: 13, color: "var(--text)" }}>{q.label}</span>
+                  <div style={{ display: "flex", gap: 4 }}>
+                    {q.opts.map(o => (
+                      <button key={o} onClick={() => set(q.key, o)} style={{
+                        padding: "4px 14px", borderRadius: 4, fontSize: 12, cursor: "pointer",
+                        border: form[q.key] === o ? "1.5px solid var(--blue)" : "1px solid var(--border)",
+                        background: form[q.key] === o ? "var(--blue)" + "10" : "#fff",
+                        color: form[q.key] === o
+                          ? (o === "Yes" ? "var(--green)" : o === "Pending" ? "var(--orange)" : "var(--text)")
+                          : "var(--text-secondary)",
+                        fontWeight: form[q.key] === o ? 600 : 400,
+                        transition: "all 50ms ease-in",
+                      }}>{o}</button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginTop: 8 }}>
+                <button onClick={() => setStep(1)} style={{
+                  padding: "8px 18px", borderRadius: 4, border: "1px solid var(--border)",
+                  background: "#fff", fontSize: 13, cursor: "pointer", transition: "background 20ms ease-in",
+                }} onMouseEnter={e => e.currentTarget.style.background = "var(--hover-bg)"} onMouseLeave={e => e.currentTarget.style.background = "#fff"}>
+                  Back
+                </button>
+                <button onClick={generateTasks} style={{
+                  padding: "8px 22px", borderRadius: 4, border: "none", fontSize: 13, fontWeight: 500,
+                  background: "var(--blue)", color: "#fff", cursor: "pointer",
+                  display: "flex", alignItems: "center", gap: 6, transition: "background 100ms",
+                }}
+                  onMouseEnter={e => e.currentTarget.style.background = "var(--blue-hover)"}
+                  onMouseLeave={e => e.currentTarget.style.background = "var(--blue)"}
+                ><Icon name="sparkle" size={14} color="#fff"/> Generate tasks</button>
+              </div>
+            </div>
+          )}
+
+          {/* ── STEP 3: Preview & Confirm ── */}
+          {step === 3 && generated && (
+            <div>
+              {/* Summary card */}
+              <div style={{
+                display: "flex", gap: 16, padding: "12px 16px", background: "var(--light-bg)",
+                borderRadius: 6, marginBottom: 16, fontSize: 12, color: "var(--text-secondary)",
+              }}>
+                <div><strong style={{ color: "var(--text)" }}>{form.name}</strong></div>
+                <div>{form.jobTitle} ({form.level})</div>
+                <div>{form.dept}{form.team ? " / " + form.team : ""}</div>
+                <div>Start: {form.hireDate}</div>
+              </div>
+
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+                <Icon name="checkCircle" size={14} color="var(--green)"/>
+                {generated.length} tasks ready to add
+              </div>
+
+              <div style={{
+                maxHeight: 300, overflowY: "auto", border: "1px solid var(--border)",
+                borderRadius: 4, marginBottom: 16,
+              }}>
+                {generated.map((t, i) => (
+                  <div key={i} style={{
+                    padding: "7px 12px", borderBottom: i < generated.length - 1 ? "1px solid var(--border)" : "none",
+                    display: "flex", alignItems: "center", gap: 8, fontSize: 12,
+                  }}>
+                    {t.status === "Done"
+                      ? <Icon name="checkCircle" size={14} color="var(--green)"/>
+                      : t.status === "In progress"
+                        ? <Icon name="clock" size={14} color="var(--orange)"/>
+                        : <div style={{ width: 14, height: 14, borderRadius: 3, border: "2px solid var(--text-light)", flexShrink: 0 }}/>
+                    }
+                    <span style={{
+                      flex: 1, color: t.status === "Done" ? "var(--text-light)" : "var(--text)",
+                      textDecoration: t.status === "Done" ? "line-through" : "none",
+                    }}>{t.title}</span>
+                    <PhaseTag label={t.phase} small/>
+                    <Tag label={t.priority} styleMap={PRIORITY_STYLES} small/>
+                    <span style={{ fontSize: 11, color: "var(--text-light)", width: 50, textAlign: "right", flexShrink: 0 }}>{t.assignee}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                <button onClick={() => { setStep(2); setGenerated(null); }} style={{
+                  padding: "8px 18px", borderRadius: 4, border: "1px solid var(--border)",
+                  background: "#fff", fontSize: 13, cursor: "pointer", transition: "background 20ms ease-in",
+                }} onMouseEnter={e => e.currentTarget.style.background = "var(--hover-bg)"} onMouseLeave={e => e.currentTarget.style.background = "#fff"}>
+                  Back
+                </button>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={reset} style={{
+                    padding: "8px 14px", borderRadius: 4, border: "1px solid var(--border)",
+                    background: "#fff", fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", gap: 5,
+                    transition: "background 20ms ease-in",
+                  }} onMouseEnter={e => e.currentTarget.style.background = "var(--hover-bg)"} onMouseLeave={e => e.currentTarget.style.background = "#fff"}>
+                    <Icon name="refresh" size={13}/> Start over
+                  </button>
+                  <button onClick={confirm} style={{
+                    padding: "8px 22px", borderRadius: 4, border: "none", fontSize: 14, fontWeight: 500,
+                    background: "var(--blue)", color: "#fff", cursor: "pointer",
+                    transition: "background 100ms",
+                  }}
+                    onMouseEnter={e => e.currentTarget.style.background = "var(--blue-hover)"}
+                    onMouseLeave={e => e.currentTarget.style.background = "var(--blue)"}
+                  >Add {generated.length} tasks</button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── AI Insights (Dashboard) ── */
+function AIInsights({ tasks }) {
+  const [insight, setInsight] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const generate = async () => {
+    setLoading(true);
+    try {
+      const total = tasks.length;
+      const done = tasks.filter(t => t.status === "Done").length;
+      const overdue = tasks.filter(t => isOverdue(t)).length;
+      const inProg = tasks.filter(t => t.status === "In progress").length;
+      const hires = [...new Set(tasks.map(t => t.hire))];
+      const hireStats = hires.map(h => {
+        const ht = tasks.filter(t => t.hire === h);
+        return `${h}: ${ht.filter(t=>t.status==="Done").length}/${ht.length} done, ${ht.filter(t=>isOverdue(t)).length} overdue`;
+      }).join("; ");
+
+      const prompt = `Analyze this HR onboarding status and give 3-4 brief, actionable insights:
+- Total: ${total} tasks, ${done} completed, ${inProg} in progress, ${overdue} overdue
+- Hires: ${hireStats}
+- Overdue tasks: ${tasks.filter(t => isOverdue(t)).map(t => `"${t.title}" (${t.hire})`).join(", ") || "none"}
+
+Give concise bullet points with specific actions. Focus on risks and priorities. No fluff.`;
+
+      const reply = await askGemini(prompt, AI_SYSTEM);
+      setInsight(reply);
+    } catch {
+      setInsight("Could not generate insights. Please try again.");
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div style={{
+      background: "#fff", borderRadius: 4, boxShadow: "var(--card-shadow)",
+      padding: "16px 20px", marginTop: 12,
+    }}>
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        marginBottom: insight ? 12 : 0,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{
+            width: 22, height: 22, borderRadius: 5, display: "flex", alignItems: "center",
+            justifyContent: "center", background: "linear-gradient(135deg, #8B5CF6, #2383e2)",
+          }}><Icon name="sparkle" size={12} color="#fff"/></div>
+          <span style={{ fontSize: 14, fontWeight: 600 }}>AI Insights</span>
+        </div>
+        <button onClick={generate} disabled={loading} style={{
+          display: "flex", alignItems: "center", gap: 5, padding: "5px 12px",
+          borderRadius: 4, border: "1px solid var(--border)", background: "#fff",
+          fontSize: 12, cursor: loading ? "wait" : "pointer", color: "var(--text-secondary)",
+          transition: "background 20ms ease-in",
+        }} onMouseEnter={e => e.currentTarget.style.background = "var(--hover-bg)"}
+           onMouseLeave={e => e.currentTarget.style.background = "#fff"}>
+          {loading ? (
+            <><div style={{ width: 12, height: 12, border: "2px solid var(--border)", borderTopColor: "var(--blue)", borderRadius: "50%", animation: "spin 0.6s linear infinite" }}/> Analyzing...</>
+          ) : (
+            <><Icon name="zap" size={13}/> Generate</>
+          )}
+        </button>
+      </div>
+      {insight && (
+        <div style={{
+          fontSize: 13, lineHeight: 1.7, color: "var(--text)", whiteSpace: "pre-wrap",
+          padding: "12px 14px", background: "var(--light-bg)", borderRadius: 4,
+          animation: "fadeUp 150ms ease-out",
+        }}>{insight}</div>
+      )}
+    </div>
+  );
+}
+
+const STORAGE_KEY = "ee_probation_tracker";
+
+function loadSaved() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const data = JSON.parse(raw);
+      if (Array.isArray(data) && data.length > 0) return data;
+    }
+  } catch {}
+  return null;
+}
+
+function App() {
+  const [tasks, setTasks] = useState(() => loadSaved() || createInitialTasks());
+  const [tab, setTab] = useState("dashboard");
+  const [search, setSearch] = useState("");
+  const [filterHire, setFilterHire] = useState(null);
+  const [peekTask, setPeekTask] = useState(null);
+  const [showImport, setShowImport] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [aiChatOpen, setAiChatOpen] = useState(false);
+  const [aiGenOpen, setAiGenOpen] = useState(false);
+  const [lastSaved, setLastSaved] = useState(null);
+
+  // Auto-save to localStorage on every change
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+      setLastSaved(new Date());
+    } catch {}
+  }, [tasks]);
+
+  const hires = useMemo(() => [...new Set(tasks.map(t => t.hire))], [tasks]);
+
+  const filtered = useMemo(() => {
+    let list = tasks;
+    if (filterHire) list = list.filter(t => t.hire === filterHire);
+    if (search) {
+      const s = search.toLowerCase();
+      list = list.filter(t =>
+        t.title.toLowerCase().includes(s) ||
+        t.hire.toLowerCase().includes(s) ||
+        t.assignee.toLowerCase().includes(s) ||
+        t.phase.toLowerCase().includes(s)
+      );
+    }
+    return list;
+  }, [tasks, filterHire, search]);
+
+  const updateTask = useCallback((id, key, val) => {
+    setTasks(ts => ts.map(t => t.id === id ? { ...t, [key]: val } : t));
+  }, []);
+
+  const deleteTask = useCallback((id) => {
+    setTasks(ts => ts.filter(t => t.id !== id));
+  }, []);
+
+  const addTask = () => {
+    const nt = {
+      id: genId(), title: "Untitled task", phase: "Pre-boarding", priority: "Medium",
+      status: "Not started", hire: hires[0] || "New Hire", assignee: "", due: todayStr(), notes: "",
+    };
+    setTasks(ts => [...ts, nt]);
+    setPeekTask(nt);
+  };
+
+  const savePeek = (form) => {
+    setTasks(ts => ts.map(t => t.id === form.id ? { ...form } : t));
+    setPeekTask(null);
+  };
+
+  const exportToFile = () => {
+    const blob = new Blob([JSON.stringify(tasks, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `ee-probation-tracker-${todayStr()}.json`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importFromFile = () => {
+    const input = document.createElement("input");
+    input.type = "file"; input.accept = ".json";
+    input.onchange = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const data = JSON.parse(ev.target.result);
+          if (Array.isArray(data)) setTasks(data);
+        } catch { alert("Invalid JSON file"); }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  };
+
+  const resetToDefault = () => {
+    if (confirm("Reset all data to original Excel import? This cannot be undone.")) {
+      setTasks(createInitialTasks());
+    }
+  };
+
+  const handleImport = (imported, mode) => {
+    if (mode === "replace") setTasks(imported);
+    else setTasks(ts => [...ts, ...imported]);
+  };
+
+  const handleAIGenerate = (newTasks, hireName) => {
+    setTasks(ts => [...ts, ...newTasks]);
+  };
+
+  const tabs = [
+    { key: "dashboard", label: "Dashboard & Reports", icon: "barChart" },
+    { key: "table", label: "Task Tracking", icon: "table" },
+    { key: "kanban", label: "Kanban Board", icon: "kanban" },
+    { key: "gantt", label: "Gantt / Timeline", icon: "timeline" },
+  ];
+
+  return (
+    <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
+      {/* Sidebar */}
+      {sidebarOpen && (
+        <div style={{
+          width: 240, flexShrink: 0, background: "var(--sidebar-bg)",
+          borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column",
+        }}>
+          <div style={{ padding: "12px 10px", display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{
+              width: 22, height: 22, borderRadius: 4, background: "var(--blue)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}><Icon name="clipboardList" size={14} color="#fff"/></div>
+            <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", flex: 1 }}>EE Probation Tracker</span>
+            <button onClick={() => setSidebarOpen(false)} style={{
+              background: "transparent", border: "none", cursor: "pointer", padding: 2,
+              borderRadius: 4, transition: "background 20ms ease-in",
+            }}
+              onMouseEnter={e => e.currentTarget.style.background = "var(--hover-bg)"}
+              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+            ><Icon name="chevronLeft" size={14} color="var(--text-secondary)"/></button>
+          </div>
+
+          <div style={{ padding: "4px 8px" }}>
+            <div style={{
+              fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em",
+              color: "var(--text-light)", padding: "8px 8px 4px",
+            }}>Views</div>
+            {tabs.map(t => (
+              <SideBtn key={t.key} icon={<Icon name={t.icon} size={14}/>}
+                active={tab === t.key} onClick={() => setTab(t.key)}>{t.label}</SideBtn>
+            ))}
+          </div>
+
+          <div style={{ padding: "4px 8px" }}>
+            <div style={{
+              fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em",
+              color: "var(--text-light)", padding: "8px 8px 4px",
+            }}>New hires</div>
+            <SideBtn icon={<Icon name="users" size={14}/>} active={!filterHire}
+              onClick={() => setFilterHire(null)} count={tasks.length}>All hires</SideBtn>
+            {hires.map(h => (
+              <SideBtn key={h}
+                icon={
+                  <div style={{
+                    width: 20, height: 20, borderRadius: "50%", background: "#e3e2e0",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 9, fontWeight: 600, color: "var(--text-secondary)", flexShrink: 0,
+                  }}>{h.split(" ").map(n => n[0]).join("")}</div>
+                }
+                active={filterHire === h}
+                onClick={() => setFilterHire(filterHire === h ? null : h)}
+                count={tasks.filter(t => t.hire === h).length}
+              >{h}</SideBtn>
+            ))}
+          </div>
+
+          <div style={{ flex: 1 }}/>
+
+          <div style={{ borderTop: "1px solid var(--border)", padding: "10px 8px" }}>
+            {lastSaved && (
+              <div style={{ fontSize: 10, color: "var(--green)", padding: "0 8px 6px", display: "flex", alignItems: "center", gap: 4 }}>
+                <Icon name="check" size={10} color="var(--green)"/>
+                Auto-saved {lastSaved.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+              </div>
+            )}
+            <SideBtn icon={<Icon name="download" size={14}/>} onClick={exportToFile}
+              style={{ fontSize: 12 }}>Export backup</SideBtn>
+            <SideBtn icon={<Icon name="upload" size={14}/>} onClick={importFromFile}
+              style={{ fontSize: 12 }}>Import backup</SideBtn>
+            <SideBtn icon={<Icon name="file" size={14}/>} onClick={() => setShowImport(true)}
+              style={{ fontSize: 12 }}>Import CSV/Excel</SideBtn>
+            <SideBtn icon={<Icon name="refresh" size={14}/>} onClick={resetToDefault}
+              style={{ fontSize: 12, color: "var(--text-light)" }}>Reset to original</SideBtn>
+          </div>
+        </div>
+      )}
+
+      {/* Main */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        {/* Header bar */}
+        <div style={{
+          height: 44, display: "flex", alignItems: "center", padding: "0 12px",
+          borderBottom: "1px solid var(--border)", gap: 8, flexShrink: 0,
+        }}>
+          {!sidebarOpen && (
+            <button onClick={() => setSidebarOpen(true)} style={{
+              background: "transparent", border: "none", cursor: "pointer", padding: 4,
+              borderRadius: 4, transition: "background 20ms ease-in",
+            }}
+              onMouseEnter={e => e.currentTarget.style.background = "var(--hover-bg)"}
+              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+            ><Icon name="chevronRight" size={14}/></button>
+          )}
+          <div style={{ fontSize: 12, color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 4 }}>
+            <Icon name="clipboardList" size={13} color="var(--text-secondary)"/>
+            <span>EE Probation Tracker</span>
+            {filterHire && (
+              <>
+                <span style={{ color: "var(--text-light)", margin: "0 2px" }}>/</span>
+                <span style={{ color: "var(--text)" }}>{filterHire}</span>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Content */}
+        <div style={{ flex: 1, overflowY: "auto" }}>
+          <div style={{ maxWidth: 1100, margin: "0 auto", padding: "0 96px" }}>
+            <div style={{ paddingTop: 80 }}>
+              <h1 style={{
+                fontFamily: "var(--font-title)", fontSize: 40, fontWeight: 700,
+                color: "var(--text)", lineHeight: 1.2, marginBottom: 4,
+              }}>EE Probation Tracker</h1>
+              <p style={{ fontSize: 14, color: "var(--text-secondary)", marginBottom: 28 }}>
+                Track employee probation milestones — 30, 60, and 90-day reviews, compliance, and clearance status.
+              </p>
+            </div>
+
+            {/* Tab bar + toolbar */}
+            <div style={{
+              display: "flex", alignItems: "center", borderBottom: "1px solid var(--border)",
+              marginBottom: 20,
+            }}>
+              {tabs.map(t => (
+                <button key={t.key} onClick={() => setTab(t.key)} style={{
+                  padding: "8px 14px", fontSize: 13, border: "none", cursor: "pointer",
+                  background: "transparent",
+                  color: tab === t.key ? "var(--text)" : "var(--text-secondary)",
+                  fontWeight: tab === t.key ? 500 : 400,
+                  borderBottom: tab === t.key ? "2px solid var(--text)" : "2px solid transparent",
+                  marginBottom: -1, transition: "color 100ms",
+                }}>{t.label}</button>
+              ))}
+              <div style={{ flex: 1 }}/>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 6, padding: "4px 8px",
+                  border: "1px solid var(--border)", borderRadius: 4,
+                }}>
+                  <Icon name="search" size={14} color="var(--text-light)"/>
+                  <input value={search} onChange={e => setSearch(e.target.value)}
+                    placeholder="Filter..." style={{
+                    border: "none", outline: "none", background: "transparent",
+                    fontSize: 13, width: 120, color: "var(--text)",
+                  }}/>
+                </div>
+                <button onClick={() => setAiGenOpen(true)} style={{
+                  display: "flex", alignItems: "center", gap: 4,
+                  background: "linear-gradient(135deg, #8B5CF6, #2383e2)",
+                  color: "#fff", border: "none", borderRadius: 4, padding: "5px 12px",
+                  fontSize: 13, cursor: "pointer", fontWeight: 500, whiteSpace: "nowrap",
+                  transition: "opacity 100ms ease-in",
+                }}
+                  onMouseEnter={e => e.currentTarget.style.opacity = "0.9"}
+                  onMouseLeave={e => e.currentTarget.style.opacity = "1"}
+                ><Icon name="plus" size={14} color="#fff"/> Add Employee</button>
+                <button onClick={addTask} style={{
+                  display: "flex", alignItems: "center", gap: 4, background: "var(--blue)",
+                  color: "#fff", border: "none", borderRadius: 4, padding: "5px 12px",
+                  fontSize: 13, cursor: "pointer", fontWeight: 500, whiteSpace: "nowrap",
+                  transition: "background 20ms ease-in",
+                }}
+                  onMouseEnter={e => e.currentTarget.style.background = "var(--blue-hover)"}
+                  onMouseLeave={e => e.currentTarget.style.background = "var(--blue)"}
+                ><Icon name="plus" size={14} color="#fff"/> New</button>
+              </div>
+            </div>
+
+            <div style={{ paddingBottom: 60 }}>
+              {tab === "dashboard" && <><DashboardView tasks={filtered}/><AIInsights tasks={filtered}/></>}
+              {tab === "table" && <TableView tasks={filtered} onUpdate={updateTask} onDelete={deleteTask} onEdit={t => setPeekTask(t)}/>}
+              {tab === "kanban" && <KanbanView tasks={filtered} onUpdate={updateTask} onEdit={t => setPeekTask(t)}/>}
+              {tab === "gantt" && <GanttView tasks={filtered} onUpdate={updateTask} onEdit={t => setPeekTask(t)}/>}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {peekTask && <SidePeek task={peekTask} onSave={savePeek} onCancel={() => setPeekTask(null)} hires={hires}/>}
+      {showImport && <ImportModal onClose={() => setShowImport(false)} onImport={handleImport}/>}
+      <AIGenerateModal open={aiGenOpen} onClose={() => setAiGenOpen(false)} onGenerate={handleAIGenerate} hires={hires}/>
+      <AIChatPanel open={aiChatOpen} onClose={() => setAiChatOpen(false)} tasks={tasks} onAddTasks={handleAIGenerate}/>
+
+      {/* AI Chat FAB */}
+      {!aiChatOpen && (
+        <button onClick={() => setAiChatOpen(true)} aria-label="Open AI Assistant" style={{
+          position: "fixed", bottom: 20, right: 20, width: 48, height: 48,
+          borderRadius: 12, border: "none", cursor: "pointer", zIndex: 4999,
+          background: "linear-gradient(135deg, #8B5CF6, #2383e2)",
+          boxShadow: "0 4px 12px rgba(35,131,226,0.4), 0 0 0 0 rgba(139,92,246,0)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          transition: "transform 100ms ease, box-shadow 100ms ease",
+        }}
+          onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.08)"; e.currentTarget.style.boxShadow = "0 6px 20px rgba(35,131,226,0.5)"; }}
+          onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "0 4px 12px rgba(35,131,226,0.4)"; }}
+        ><Icon name="sparkle" size={22} color="#fff"/></button>
+      )}
+    </div>
+  );
+}
+
+/* ── Wireframe Dotted Globe ── */
+function WireframeGlobe() {
+  const canvasRef = useRef(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || typeof d3 === "undefined") return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const cw = window.innerWidth;
+    const ch = window.innerHeight;
+    const radius = Math.min(cw, ch) * 0.35;
+    const dpr = window.devicePixelRatio || 1;
+
+    canvas.width = cw * dpr;
+    canvas.height = ch * dpr;
+    canvas.style.width = cw + "px";
+    canvas.style.height = ch + "px";
+    ctx.scale(dpr, dpr);
+
+    const projection = d3.geoOrthographic()
+      .scale(radius)
+      .translate([cw / 2, ch / 2])
+      .clipAngle(90);
+
+    const path = d3.geoPath().projection(projection).context(ctx);
+
+    const pointInPoly = (pt, poly) => {
+      let inside = false;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const [xi, yi] = poly[i], [xj, yj] = poly[j];
+        if ((yi > pt[1]) !== (yj > pt[1]) && pt[0] < ((xj - xi) * (pt[1] - yi)) / (yj - yi) + xi) inside = !inside;
+      }
+      return inside;
+    };
+
+    const pointInFeature = (pt, feat) => {
+      const g = feat.geometry;
+      if (g.type === "Polygon") {
+        if (!pointInPoly(pt, g.coordinates[0])) return false;
+        for (let i = 1; i < g.coordinates.length; i++) if (pointInPoly(pt, g.coordinates[i])) return false;
+        return true;
+      } else if (g.type === "MultiPolygon") {
+        for (const poly of g.coordinates) {
+          if (pointInPoly(pt, poly[0])) {
+            let hole = false;
+            for (let i = 1; i < poly.length; i++) if (pointInPoly(pt, poly[i])) { hole = true; break; }
+            if (!hole) return true;
+          }
+        }
+      }
+      return false;
+    };
+
+    let landFeatures = null;
+    const allDots = [];
+    const rotation = [0, -20];
+
+    const render = () => {
+      ctx.clearRect(0, 0, cw, ch);
+      const sc = projection.scale() / radius;
+
+      // Globe circle
+      ctx.beginPath();
+      ctx.arc(cw / 2, ch / 2, projection.scale(), 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(0,0,0,0.3)";
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,0.15)";
+      ctx.lineWidth = 1.5 * sc;
+      ctx.stroke();
+
+      if (!landFeatures) return;
+
+      // Graticule
+      const grat = d3.geoGraticule();
+      ctx.beginPath();
+      path(grat());
+      ctx.strokeStyle = "rgba(255,255,255,0.08)";
+      ctx.lineWidth = 0.5 * sc;
+      ctx.stroke();
+
+      // Land outlines
+      ctx.beginPath();
+      landFeatures.features.forEach(f => path(f));
+      ctx.strokeStyle = "rgba(255,255,255,0.2)";
+      ctx.lineWidth = 0.8 * sc;
+      ctx.stroke();
+
+      // Dots
+      allDots.forEach(dot => {
+        const p = projection([dot[0], dot[1]]);
+        if (p && p[0] >= 0 && p[0] <= cw && p[1] >= 0 && p[1] <= ch) {
+          ctx.beginPath();
+          ctx.arc(p[0], p[1], 1.0 * sc, 0, Math.PI * 2);
+          ctx.fillStyle = "rgba(150,150,150,0.6)";
+          ctx.fill();
+        }
+      });
+    };
+
+    // Load world data
+    fetch("https://raw.githubusercontent.com/martynafford/natural-earth-geojson/refs/heads/master/110m/physical/ne_110m_land.json")
+      .then(r => r.json())
+      .then(data => {
+        landFeatures = data;
+        data.features.forEach(feat => {
+          const bounds = d3.geoBounds(feat);
+          const step = 1.3;
+          for (let lng = bounds[0][0]; lng <= bounds[1][0]; lng += step) {
+            for (let lat = bounds[0][1]; lat <= bounds[1][1]; lat += step) {
+              if (pointInFeature([lng, lat], feat)) allDots.push([lng, lat]);
+            }
+          }
+        });
+        render();
+      })
+      .catch(() => {});
+
+    // Auto-rotate
+    let autoRotate = true;
+    const timer = d3.timer(() => {
+      if (autoRotate) {
+        rotation[0] += 0.3;
+        projection.rotate(rotation);
+        render();
+      }
+    });
+
+    // Drag interaction
+    const handleMouseDown = (e) => {
+      autoRotate = false;
+      const sx = e.clientX, sy = e.clientY;
+      const sr = [...rotation];
+      const move = (me) => {
+        rotation[0] = sr[0] + (me.clientX - sx) * 0.4;
+        rotation[1] = Math.max(-90, Math.min(90, sr[1] - (me.clientY - sy) * 0.4));
+        projection.rotate(rotation);
+        render();
+      };
+      const up = () => {
+        document.removeEventListener("mousemove", move);
+        document.removeEventListener("mouseup", up);
+        setTimeout(() => { autoRotate = true; }, 10);
+      };
+      document.addEventListener("mousemove", move);
+      document.addEventListener("mouseup", up);
+    };
+
+    const handleWheel = (e) => {
+      e.preventDefault();
+      const s = e.deltaY > 0 ? 0.95 : 1.05;
+      projection.scale(Math.max(radius * 0.4, Math.min(radius * 2.5, projection.scale() * s)));
+      render();
+    };
+
+    canvas.addEventListener("mousedown", handleMouseDown);
+    canvas.addEventListener("wheel", handleWheel, { passive: false });
+
+    const handleResize = () => {
+      const w = window.innerWidth, h = window.innerHeight;
+      const r = Math.min(w, h) * 0.35;
+      canvas.width = w * dpr; canvas.height = h * dpr;
+      canvas.style.width = w + "px"; canvas.style.height = h + "px";
+      ctx.setTransform(1,0,0,1,0,0); ctx.scale(dpr, dpr);
+      projection.translate([w / 2, h / 2]).scale(r);
+      render();
+    };
+    window.addEventListener("resize", handleResize);
+
+    return () => {
+      timer.stop();
+      canvas.removeEventListener("mousedown", handleMouseDown);
+      canvas.removeEventListener("wheel", handleWheel);
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
+
+  return (
+    <canvas ref={canvasRef} style={{
+      position: "absolute", inset: 0, width: "100%", height: "100%",
+      zIndex: 0, pointerEvents: "auto",
+    }}/>
+  );
+}
+
+/* ── Login / Hero Page ── */
+const APP_PASSWORD = "0904";
+const AUTH_KEY = "ee_tracker_auth";
+
+function LoginPage({ onLogin }) {
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState(false);
+  const [showPw, setShowPw] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const inputRef = useRef(null);
+
+  useEffect(() => { if (inputRef.current) inputRef.current.focus(); }, []);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(false);
+    setTimeout(() => {
+      if (password === APP_PASSWORD) {
+        sessionStorage.setItem(AUTH_KEY, "1");
+        onLogin();
+      } else {
+        setError(true);
+        setLoading(false);
+        setPassword("");
+        if (inputRef.current) inputRef.current.focus();
+      }
+    }, 600);
+  };
+
+  return (
+    <div style={{
+      minHeight: "100vh", display: "flex", flexDirection: "column",
+      background: "#000", position: "relative", overflow: "hidden",
+    }}>
+      {/* Globe background */}
+      <WireframeGlobe/>
+
+      {/* Gradient overlay for readability */}
+      <div style={{
+        position: "absolute", inset: 0, zIndex: 1, pointerEvents: "none",
+        background: "radial-gradient(ellipse at center, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.7) 100%)",
+      }}/>
+
+      {/* Nav bar */}
+      <div style={{
+        padding: "24px 40px", display: "flex", alignItems: "center", gap: 10,
+        position: "relative", zIndex: 10, animation: "fadeIn 0.8s ease",
+      }}>
+        <div style={{
+          width: 32, height: 32, borderRadius: 8, display: "flex", alignItems: "center",
+          justifyContent: "center", background: "rgba(255,255,255,0.06)",
+          border: "1px solid rgba(255,255,255,0.12)", backdropFilter: "blur(8px)",
+        }}><Icon name="clipboardList" size={16} color="#fff"/></div>
+        <span style={{ fontSize: 14, fontWeight: 600, color: "rgba(255,255,255,0.9)", letterSpacing: "0.02em" }}>EE MANAGEMENT</span>
+      </div>
+
+      {/* Center content */}
+      <div style={{
+        flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
+        position: "relative", zIndex: 10, padding: "0 20px",
+      }}>
+        <div style={{ textAlign: "center", maxWidth: 420, width: "100%", animation: "fadeUp 1s ease 0.3s both" }}>
+
+          {/* Shield icon */}
+          <div style={{
+            width: 56, height: 56, borderRadius: 14, margin: "0 auto 24px",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
+            backdropFilter: "blur(12px)",
+          }}>
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              <path d="M9 12l2 2 4-4"/>
+            </svg>
+          </div>
+
+          <h1 style={{
+            fontFamily: "Georgia, serif", fontSize: 40, fontWeight: 700,
+            color: "#fff", lineHeight: 1.15, marginBottom: 10, letterSpacing: "-0.03em",
+          }}>Probation Tracker</h1>
+
+          <p style={{
+            fontSize: 15, color: "rgba(255,255,255,0.45)", lineHeight: 1.6, marginBottom: 36,
+          }}>Enter your access code to manage employee<br/>onboarding and probation reviews.</p>
+
+          {/* Login form — glass card */}
+          <form onSubmit={handleSubmit} style={{
+            width: "100%", maxWidth: 360, margin: "0 auto",
+            background: "rgba(255,255,255,0.04)", backdropFilter: "blur(20px)",
+            border: "1px solid rgba(255,255,255,0.08)", borderRadius: 16,
+            padding: "28px 24px 24px",
+          }}>
+            <div style={{
+              position: "relative", marginBottom: 14,
+              animation: error ? "shake 0.4s ease" : "none",
+            }}>
+              <div style={{
+                position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)",
+                pointerEvents: "none", display: "flex", alignItems: "center",
+              }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={error ? "#EF4444" : "rgba(255,255,255,0.35)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+                </svg>
+              </div>
+              <input
+                ref={inputRef}
+                type={showPw ? "text" : "password"}
+                value={password}
+                onChange={e => { setPassword(e.target.value); setError(false); }}
+                placeholder="Enter access code"
+                autoComplete="off"
+                style={{
+                  width: "100%", padding: "14px 44px 14px 42px", fontSize: 14,
+                  background: "rgba(255,255,255,0.06)",
+                  border: error ? "1.5px solid #EF4444" : "1.5px solid rgba(255,255,255,0.1)",
+                  borderRadius: 10, color: "#fff", outline: "none",
+                  transition: "border-color 150ms, background 150ms, box-shadow 150ms",
+                  letterSpacing: showPw ? "normal" : "0.15em",
+                }}
+                onFocus={e => { if (!error) { e.currentTarget.style.borderColor = "rgba(255,255,255,0.3)"; e.currentTarget.style.boxShadow = "0 0 0 3px rgba(255,255,255,0.05)"; } }}
+                onBlur={e => { if (!error) { e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)"; e.currentTarget.style.boxShadow = "none"; } }}
+              />
+              <button type="button" onClick={() => setShowPw(!showPw)} style={{
+                position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)",
+                background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex",
+              }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  {showPw ? (
+                    <><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>
+                  ) : (
+                    <><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></>
+                  )}
+                </svg>
+              </button>
+            </div>
+
+            {error && (
+              <div style={{
+                fontSize: 13, color: "#EF4444", marginBottom: 12, display: "flex",
+                alignItems: "center", gap: 6, justifyContent: "center", animation: "fadeUp 0.2s ease",
+              }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
+                </svg>
+                Incorrect access code
+              </div>
+            )}
+
+            <button type="submit" disabled={!password || loading} style={{
+              width: "100%", padding: "13px 24px", fontSize: 14, fontWeight: 600,
+              borderRadius: 10, border: "none",
+              cursor: password && !loading ? "pointer" : "not-allowed",
+              color: "#000", letterSpacing: "0.01em",
+              background: password && !loading ? "#fff" : "rgba(255,255,255,0.1)",
+              transition: "all 200ms ease",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+            }}
+              onMouseEnter={e => { if (password && !loading) e.currentTarget.style.background = "rgba(255,255,255,0.9)"; }}
+              onMouseLeave={e => { if (password && !loading) e.currentTarget.style.background = "#fff"; }}
+            >
+              {loading ? (
+                <div style={{ width: 18, height: 18, border: "2px solid rgba(0,0,0,0.2)", borderTopColor: "#000", borderRadius: "50%", animation: "spin 0.6s linear infinite" }}/>
+              ) : "Sign in"}
+            </button>
+
+            <p style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", marginTop: 14, lineHeight: 1.4 }}>
+              Contact HR admin if you don't have an access code
+            </p>
+          </form>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div style={{
+        padding: "20px 40px", textAlign: "center", position: "relative", zIndex: 10,
+        animation: "fadeIn 1.2s ease",
+      }}>
+        <div style={{ display: "flex", justifyContent: "center", gap: 20, fontSize: 11, color: "rgba(255,255,255,0.2)" }}>
+          <span>EE Management System</span>
+          <span style={{ opacity: 0.5 }}>|</span>
+          <span>Confidential</span>
+          <span style={{ opacity: 0.5 }}>|</span>
+          <span>HR Department</span>
+        </div>
+      </div>
+
+      {/* Bottom hint */}
+      <div style={{
+        position: "absolute", bottom: 48, left: 20, fontSize: 10, color: "rgba(255,255,255,0.15)",
+        zIndex: 10, padding: "4px 8px", borderRadius: 4, background: "rgba(0,0,0,0.3)",
+      }}>
+        Drag to rotate globe
+      </div>
+    </div>
+  );
+}
+
+/* ── Root with Auth Gate ── */
+function Root() {
+  const [authed, setAuthed] = useState(() => sessionStorage.getItem(AUTH_KEY) === "1");
+
+  if (!authed) return <LoginPage onLogin={() => setAuthed(true)}/>;
+  return <App/>;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<Root/>);
+</script>
+</body>
+</html>
