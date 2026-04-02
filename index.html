@@ -1247,15 +1247,33 @@ function TableView({ tasks, onUpdate, onDelete, onEdit }) {
 /* ── Kanban ── */
 function KanbanView({ tasks, onUpdate, onEdit }) {
   const [dragId, setDragId] = useState(null);
+  const [dragOver, setDragOver] = useState(null);
+
+  const handleDrop = (e, status) => {
+    e.preventDefault();
+    setDragOver(null);
+    if (dragId) {
+      onUpdate(dragId, "status", status);
+      setDragId(null);
+    }
+  };
+
   return (
     <div style={{ display: "grid", gridTemplateColumns: `repeat(${STATUSES.length}, 1fr)`, gap: 10, minHeight: 400, alignItems: "start" }}>
       {STATUSES.map(status => {
         const col = tasks.filter(t => t.status === status);
+        const isOver = dragOver === status && dragId;
         return (
           <div key={status}
-            onDragOver={e => e.preventDefault()}
-            onDrop={e => { e.preventDefault(); if (dragId) { onUpdate(dragId, "status", status); setDragId(null); } }}
-            style={{ minWidth: 0, background: "var(--light-bg)", borderRadius: 4, padding: 6 }}
+            onDragOver={e => { e.preventDefault(); setDragOver(status); }}
+            onDragLeave={() => setDragOver(null)}
+            onDrop={e => handleDrop(e, status)}
+            style={{
+              minWidth: 0, borderRadius: 6, padding: 6, minHeight: 120,
+              background: isOver ? "rgba(35,131,226,0.06)" : "var(--light-bg)",
+              border: isOver ? "2px dashed var(--blue)" : "2px solid transparent",
+              transition: "background 100ms, border-color 100ms",
+            }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 6px", marginBottom: 4 }}>
               <Tag label={status} styleMap={STATUS_STYLES}/>
@@ -1265,11 +1283,13 @@ function KanbanView({ tasks, onUpdate, onEdit }) {
               {col.map(task => (
                 <div key={task.id} draggable
                   onDragStart={e => { setDragId(task.id); e.dataTransfer.effectAllowed = "move"; }}
+                  onDragEnd={() => { setDragId(null); setDragOver(null); }}
                   onClick={() => onEdit(task)}
                   style={{
                     background: "#fff", borderRadius: 4, padding: "10px 12px",
                     cursor: "grab", boxShadow: "var(--card-shadow)",
-                    transition: "background 20ms ease-in",
+                    opacity: dragId === task.id ? 0.5 : 1,
+                    transition: "background 20ms ease-in, opacity 100ms",
                   }}
                   onMouseEnter={e => e.currentTarget.style.background = "var(--light-bg)"}
                   onMouseLeave={e => e.currentTarget.style.background = "#fff"}
@@ -2344,12 +2364,14 @@ function App() {
   const [aiGenOpen, setAiGenOpen] = useState(false);
   const [lastSaved, setLastSaved] = useState(null);
   const [cloudStatus, setCloudStatus] = useState("syncing"); // "synced", "syncing", "offline"
+  const skipNextSave = useRef(false); // prevent save loop on cloud load
 
   // On first load: pull from Firestore (cloud is source of truth)
   useEffect(() => {
     setCloudStatus("syncing");
     loadFromCloud().then(cloudData => {
       if (cloudData) {
+        skipNextSave.current = true; // don't re-save what we just loaded
         setTasks(cloudData);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudData));
         setCloudStatus("synced");
@@ -2365,18 +2387,24 @@ function App() {
   const isFirstRender = useRef(true);
   useEffect(() => {
     if (isFirstRender.current) { isFirstRender.current = false; return; }
+    if (skipNextSave.current) { skipNextSave.current = false; return; }
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
       setLastSaved(new Date());
       setCloudStatus("syncing");
       saveToCloud(tasks);
-      // Mark synced after debounce completes
       clearTimeout(window._syncTimer);
       window._syncTimer = setTimeout(() => setCloudStatus("synced"), 1200);
     } catch {}
   }, [tasks]);
 
-  const hires = useMemo(() => [...new Set(tasks.map(t => t.hire))], [tasks]);
+  const allHires = useMemo(() => [...new Set(tasks.map(t => t.hire))], [tasks]);
+  // Split into active vs completed (all tasks Done)
+  const completedHires = useMemo(() => allHires.filter(h => {
+    const ht = tasks.filter(t => t.hire === h);
+    return ht.length > 0 && ht.every(t => t.status === "Done");
+  }), [tasks, allHires]);
+  const hires = useMemo(() => allHires.filter(h => !completedHires.includes(h)), [allHires, completedHires]);
 
   const filtered = useMemo(() => {
     let list = tasks;
@@ -2519,6 +2547,35 @@ function App() {
               >{h}</SideBtn>
             ))}
           </div>
+
+          {/* Completed section */}
+          {completedHires.length > 0 && (
+            <div style={{ padding: "4px 8px" }}>
+              <div style={{
+                fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em",
+                color: "var(--text-light)", padding: "8px 8px 4px",
+                display: "flex", alignItems: "center", gap: 6,
+              }}>
+                <Icon name="checkCircle" size={11} color="var(--green)"/> Completed
+                <span style={{ fontSize: 10, color: "var(--text-light)", fontWeight: 400 }}>({completedHires.length})</span>
+              </div>
+              {completedHires.map(h => (
+                <SideBtn key={h}
+                  icon={
+                    <div style={{
+                      width: 20, height: 20, borderRadius: "50%", background: "#dbeddb",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 9, fontWeight: 600, color: "var(--green)", flexShrink: 0,
+                    }}>{h.split(" ").map(n => n[0]).join("")}</div>
+                  }
+                  active={filterHire === h}
+                  onClick={() => setFilterHire(filterHire === h ? null : h)}
+                  count={<Icon name="checkCircle" size={12} color="var(--green)"/>}
+                  style={{ color: "var(--text-light)" }}
+                >{h}</SideBtn>
+              ))}
+            </div>
+          )}
 
           <div style={{ flex: 1 }}/>
 
