@@ -8,6 +8,19 @@
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script src="https://unpkg.com/d3@7/dist/d3.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script>
+  firebase.initializeApp({
+    apiKey: "AIzaSyCycls_uGLxY2Chqlz4kxbUnO3uuYISkfg",
+    authDomain: "skyy-cac49.firebaseapp.com",
+    projectId: "skyy-cac49",
+    storageBucket: "skyy-cac49.firebasestorage.app",
+    messagingSenderId: "125489719744",
+    appId: "1:125489719744:web:b647bf09c7e1a5e82b0025",
+  });
+  const db = firebase.firestore();
+</script>
 <style>
 :root {
   --bg: #ffffff;
@@ -2280,12 +2293,39 @@ Give concise bullet points with specific actions. Focus on risks and priorities.
 }
 
 const STORAGE_KEY = "ee_probation_tracker";
+const FIRESTORE_DOC = "app_data/tasks";
 
+// Load from localStorage first (instant), then sync from Firestore
 function loadSaved() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const data = JSON.parse(raw);
+      if (Array.isArray(data) && data.length > 0) return data;
+    }
+  } catch {}
+  return null;
+}
+
+// Save to Firestore (cloud)
+let _saveTimer = null;
+function saveToCloud(tasks) {
+  // Debounce: wait 800ms after last change before saving to cloud
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(() => {
+    try {
+      db.doc(FIRESTORE_DOC).set({ tasks: JSON.stringify(tasks), updatedAt: new Date().toISOString() })
+        .catch(() => {});
+    } catch {}
+  }, 800);
+}
+
+// Load from Firestore (cloud)
+async function loadFromCloud() {
+  try {
+    const snap = await db.doc(FIRESTORE_DOC).get();
+    if (snap.exists) {
+      const data = JSON.parse(snap.data().tasks);
       if (Array.isArray(data) && data.length > 0) return data;
     }
   } catch {}
@@ -2303,12 +2343,36 @@ function App() {
   const [aiChatOpen, setAiChatOpen] = useState(false);
   const [aiGenOpen, setAiGenOpen] = useState(false);
   const [lastSaved, setLastSaved] = useState(null);
+  const [cloudStatus, setCloudStatus] = useState("syncing"); // "synced", "syncing", "offline"
 
-  // Auto-save to localStorage on every change
+  // On first load: pull from Firestore (cloud is source of truth)
   useEffect(() => {
+    setCloudStatus("syncing");
+    loadFromCloud().then(cloudData => {
+      if (cloudData) {
+        setTasks(cloudData);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudData));
+        setCloudStatus("synced");
+      } else {
+        // No cloud data yet — push local data to cloud
+        saveToCloud(tasks);
+        setCloudStatus("synced");
+      }
+    }).catch(() => setCloudStatus("offline"));
+  }, []);
+
+  // Auto-save to both localStorage AND Firestore on every change
+  const isFirstRender = useRef(true);
+  useEffect(() => {
+    if (isFirstRender.current) { isFirstRender.current = false; return; }
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
       setLastSaved(new Date());
+      setCloudStatus("syncing");
+      saveToCloud(tasks);
+      // Mark synced after debounce completes
+      clearTimeout(window._syncTimer);
+      window._syncTimer = setTimeout(() => setCloudStatus("synced"), 1200);
     } catch {}
   }, [tasks]);
 
@@ -2459,12 +2523,13 @@ function App() {
           <div style={{ flex: 1 }}/>
 
           <div style={{ borderTop: "1px solid var(--border)", padding: "10px 8px" }}>
-            {lastSaved && (
-              <div style={{ fontSize: 10, color: "var(--green)", padding: "0 8px 6px", display: "flex", alignItems: "center", gap: 4 }}>
-                <Icon name="check" size={10} color="var(--green)"/>
-                Auto-saved {lastSaved.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
-              </div>
-            )}
+            <div style={{ fontSize: 10, padding: "0 8px 6px", display: "flex", alignItems: "center", gap: 4,
+              color: cloudStatus === "synced" ? "var(--green)" : cloudStatus === "syncing" ? "var(--blue)" : "var(--orange)",
+            }}>
+              {cloudStatus === "synced" && <><Icon name="check" size={10} color="var(--green)"/> Cloud synced {lastSaved ? lastSaved.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : ""}</>}
+              {cloudStatus === "syncing" && <><div style={{ width: 10, height: 10, border: "1.5px solid var(--border)", borderTopColor: "var(--blue)", borderRadius: "50%", animation: "spin 0.8s linear infinite" }}/> Saving to cloud...</>}
+              {cloudStatus === "offline" && <><Icon name="alert" size={10} color="var(--orange)"/> Offline — saved locally</>}
+            </div>
             <SideBtn icon={<Icon name="download" size={14}/>} onClick={exportToFile}
               style={{ fontSize: 12 }}>Export backup</SideBtn>
             <SideBtn icon={<Icon name="upload" size={14}/>} onClick={importFromFile}
